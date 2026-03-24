@@ -1,5 +1,5 @@
 import { Helmet } from '@modern-js/runtime/head';
-import './index.css';
+import './index.less';
 
 const Index = () => (
   <div className="container-box">
