@@ -1,0 +1,120 @@
+.welcome-view {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+
+  .welcome-header {
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .recommendation-cards {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+
+    .card-column {
+      flex: 1;
+      min-width: 300px;
+      background: #f9f0ff;
+      border-radius: 16px;
+      padding: 24px;
+
+      .column-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: #1f1f1f;
+      }
+    }
+  }
+}
+
+.hot-topic-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e6e6e6;
+  color: #8c8c8c;
+  font-size: 14px;
+  font-weight: bold;
+  flex-shrink: 0;
+
+  &.rank-1 {
+    background: #ff4d4f;
+    color: #fff;
+  }
+  &.rank-2 {
+    background: #fa8c16;
+    color: #fff;
+  }
+  &.rank-3 {
+    background: #fadb14;
+    color: #fff;
+  }
+}
+
+.design-guide-icon {
+  font-size: 24px;
+  color: #722ed1;
+  flex-shrink: 0;
+}
+
+/* Override default Prompts styles to look like white cards */
+:global {
+  .ant-prompts {
+    width: 100%;
+  }
+  
+  .ant-prompts-item {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+    cursor: pointer;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    &:hover {
+      border-color: #d3adf7;
+      box-shadow: 0 4px 12px rgba(114, 46, 209, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .ant-prompts-item-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      .ant-prompts-item-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1f1f1f;
+      }
+
+      .ant-prompts-item-description {
+        font-size: 13px;
+        color: #8c8c8c;
+        line-height: 1.5;
+      }
+    }
+  }
+}

@@ -30,3 +30,12 @@ log/
 modern.config.local.*
 .trae/specs
 .trae/documents
+
+# Python testing environment
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+reports/
+

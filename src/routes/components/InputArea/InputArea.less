@@ -1,0 +1,88 @@
+.input-area-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+}
+
+.prompts-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.sender-wrapper {
+  width: 100%;
+}
+
+.sender-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sender-icon-btn {
+  color: #666;
+  &:hover {
+    color: #333;
+    background: rgba(0, 0, 0, 0.04);
+  }
+}
+
+.sender-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 覆盖 Sender 默认样式，使其更符合设计图 */
+:global {
+  .ant-sender {
+    border-radius: 24px;
+    padding: 8px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e6eb;
+    background: #fff;
+    transition: all 0.3s ease;
+
+    &:hover,
+    &:focus-within {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      border-color: #1677ff;
+    }
+
+    .ant-input {
+      font-size: 16px;
+      padding: 4px 0;
+      &::placeholder {
+        color: #b0b4b8;
+      }
+    }
+  }
+
+  .ant-prompts {
+    gap: 8px;
+    
+    .ant-prompts-item {
+      border-radius: 16px;
+      padding: 4px 12px;
+      background: #f2f3f5;
+      border: 1px solid transparent;
+      color: #4e5969;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+
+      &:hover {
+        background: #e5e6eb;
+        color: #1d2129;
+      }
+
+      .anticon {
+        margin-right: 4px;
+      }
+    }
+  }
+}
