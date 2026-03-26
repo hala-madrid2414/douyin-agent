@@ -1,7 +1,8 @@
+import os
 from playwright.sync_api import Page, expect
 
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 AI_REPLY_SUBSTRING = "前端 Mock 固定回复"
 
 

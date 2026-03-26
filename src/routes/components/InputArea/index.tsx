@@ -26,8 +26,8 @@ export interface InputAreaProps {
 const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
   const [value, setValue] = useState('');
 
-  const handleSend = () => {
-    const content = value.trim();
+  const handleSend = (message?: string) => {
+    const content = (typeof message === 'string' ? message : value).trim();
     if (!content) return;
     onSend(content);
     setValue('');
@@ -57,7 +57,14 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
         <Sender
           value={value}
           onChange={setValue}
+          submitType="enter"
           onSubmit={handleSend}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              handleSend();
+            }
+          }}
           placeholder="提问或输入 / 使用技能"
           prefix={
             <Button
@@ -77,7 +84,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
                 type="primary"
                 shape="circle"
                 icon={<ArrowUpOutlined />}
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!value.trim()}
                 className="sender-send-btn"
                 aria-label="发送"
