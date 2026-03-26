@@ -7,12 +7,20 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { Button } from 'antd';
-import React, { useState } from 'react';
+import React from 'react';
 import './Sidebar.less';
 
-const Sidebar: React.FC = () => {
-  const [activeId, setActiveId] = useState<string>('history-1');
+export interface SidebarProps {
+  activeId: string | null;
+  onSelectSession: (id: string) => void;
+  onNewChat: () => void;
+}
 
+const Sidebar: React.FC<SidebarProps> = ({
+  activeId,
+  onSelectSession,
+  onNewChat,
+}) => {
   // 模拟分组逻辑
   const groupedHistory = {
     今天: CHAT_HISTORY.filter(
@@ -41,7 +49,7 @@ const Sidebar: React.FC = () => {
         type="primary"
         icon={<PlusOutlined />}
         className="new-chat-btn"
-        onClick={() => setActiveId('')}
+        onClick={onNewChat}
       >
         新对话
       </Button>
@@ -58,7 +66,7 @@ const Sidebar: React.FC = () => {
                   {/* biome-ignore lint/a11y/useKeyWithClickEvents: Mockup */}
                   <div
                     className={`history-item ${activeId === item.id ? 'active' : ''}`}
-                    onClick={() => setActiveId(item.id)}
+                    onClick={() => onSelectSession(item.id)}
                   >
                     <MessageOutlined className="history-icon" />
                     <span>{item.title}</span>

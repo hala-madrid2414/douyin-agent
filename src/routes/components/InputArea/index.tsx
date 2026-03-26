@@ -19,12 +19,17 @@ const iconMap: Record<string, React.ReactNode> = {
   DownloadOutlined: <DownloadOutlined />,
 };
 
-const InputArea: React.FC = () => {
+export interface InputAreaProps {
+  onSend: (content: string) => void;
+}
+
+const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
   const [value, setValue] = useState('');
 
   const handleSend = () => {
-    if (!value.trim()) return;
-    // Here we can handle sending the message
+    const content = value.trim();
+    if (!content) return;
+    onSend(content);
     setValue('');
   };
 
@@ -75,6 +80,7 @@ const InputArea: React.FC = () => {
                 onClick={handleSend}
                 disabled={!value.trim()}
                 className="sender-send-btn"
+                aria-label="发送"
               />
             </div>
           }

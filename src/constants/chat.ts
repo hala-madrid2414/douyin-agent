@@ -17,6 +17,21 @@ export interface ChatHistoryItem {
   time: string;
 }
 
+export type ChatRole = 'user' | 'assistant';
+
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  time: string;
+  messages: ChatMessage[];
+}
+
 // 热门话题 Mock 数据
 export const HOT_TOPICS: Topic[] = [
   {
@@ -88,4 +103,46 @@ export const CHAT_HISTORY: ChatHistoryItem[] = [
   { id: 'history-2', title: 'Antd 自定义主题', time: '昨天' },
   { id: 'history-3', title: '如何使用 Vite 部署', time: '3天前' },
   { id: 'history-4', title: 'TypeScript 泛型解析', time: '1周前' },
+];
+
+export const STATIC_AI_REPLY =
+  '收到，我会基于当前上下文为你提供清晰的步骤与示例（本次为前端 Mock 固定回复）。';
+
+export const MOCK_CHAT_SESSIONS: ChatSession[] = [
+  {
+    id: 'history-1',
+    title: 'React 基础教程',
+    time: '2小时前',
+    messages: [
+      { id: 'history-1-m1', role: 'user', content: '帮我回顾一下 React 的核心概念。' },
+      { id: 'history-1-m2', role: 'assistant', content: STATIC_AI_REPLY },
+    ],
+  },
+  {
+    id: 'history-2',
+    title: 'Antd 自定义主题',
+    time: '昨天',
+    messages: [
+      { id: 'history-2-m1', role: 'user', content: 'Antd 如何做主题定制？' },
+      { id: 'history-2-m2', role: 'assistant', content: STATIC_AI_REPLY },
+    ],
+  },
+  {
+    id: 'history-3',
+    title: '如何使用 Vite 部署',
+    time: '3天前',
+    messages: [
+      { id: 'history-3-m1', role: 'user', content: 'Vite 构建后如何部署到静态站点？' },
+      { id: 'history-3-m2', role: 'assistant', content: STATIC_AI_REPLY },
+    ],
+  },
+  {
+    id: 'history-4',
+    title: 'TypeScript 泛型解析',
+    time: '1周前',
+    messages: [
+      { id: 'history-4-m1', role: 'user', content: '解释一下泛型约束和默认类型参数。' },
+      { id: 'history-4-m2', role: 'assistant', content: STATIC_AI_REPLY },
+    ],
+  },
 ];
