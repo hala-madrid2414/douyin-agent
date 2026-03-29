@@ -1,11 +1,12 @@
-import type { ChatMessage } from '@/constants/chat';
+import type { ConversationMessage } from '@/types/session';
 import { RobotOutlined } from '@ant-design/icons';
 import { Avatar, Typography } from 'antd';
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import './MessageList.less';
 
 export interface MessageListProps {
-  messages: ChatMessage[];
+  messages: ConversationMessage[];
 }
 
 const MessageList: React.FC<MessageListProps> = ({ messages }) => {
@@ -13,7 +14,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  }, [messages.length]);
+  });
 
   return (
     <div className="message-list" data-testid="message-list">

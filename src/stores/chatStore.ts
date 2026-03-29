@@ -1,0 +1,438 @@
+import { MOCK_CHAT_SESSIONS, STATIC_AI_REPLY } from '@/constants/chat';
+import {
+  CHAT_CACHE_SCHEMA_VERSION,
+  CHAT_CACHE_TTL_MS,
+} from '@/constants/session';
+import type {
+  ConversationEntity,
+  ConversationId,
+  ConversationMessage,
+  ConversationSummary,
+} from '@/types/session';
+import { createConversationId, isConversationId } from '@/utils/conversationId';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+const DEFAULT_USER_ID = 'mock-user';
+const CHAT_STORE_KEY = 'chat-store';
+
+interface ChatUserBucket {
+  conversationsById: Record<ConversationId, ConversationEntity>;
+  order: ConversationId[];
+  draftByConversationId: Record<ConversationId, string>;
+  persistedAt: number;
+}
+
+interface ChatStoreState {
+  activeUserId: string;
+  byUser: Record<string, ChatUserBucket>;
+  setActiveUser: (userId: string) => void;
+  ensureConversation: (conversationId: ConversationId) => void;
+  createConversation: () => ConversationId;
+  setDraft: (conversationId: ConversationId, draft: string) => void;
+  appendMessage: (
+    conversationId: ConversationId,
+    message: Omit<ConversationMessage, 'createdAt'> & { createdAt?: string },
+  ) => void;
+  sendMockConversationTurn: (
+    conversationId: ConversationId,
+    content: string,
+  ) => void;
+}
+
+const nowIso = () => new Date().toISOString();
+
+const normalizeConversationId = (
+  rawId: string,
+  index: number,
+): ConversationId => {
+  if (isConversationId(rawId)) {
+    return rawId;
+  }
+  return `${17000000000000000 + index}`;
+};
+
+const createConversationFromMock = (
+  index: number,
+  mock: (typeof MOCK_CHAT_SESSIONS)[number],
+): ConversationEntity => {
+  const createdAt = new Date(
+    Date.now() - (index + 1) * 60 * 60 * 1000,
+  ).toISOString();
+  const updatedAt = new Date(Date.now() - index * 40 * 60 * 1000).toISOString();
+  const id = normalizeConversationId(mock.id, index + 1);
+  const messages: ConversationMessage[] = mock.messages.map(
+    (message, messageIndex) => ({
+      id: `${id}-${message.role}-${messageIndex + 1}`,
+      role: message.role,
+      content: message.content,
+      status: 'complete',
+      createdAt: new Date(
+        Date.now() - (index + 1) * 60 * 60 * 1000 + messageIndex * 1000,
+      ).toISOString(),
+    }),
+  );
+  const lastMessagePreview =
+    messages[messages.length - 1]?.content.slice(0, 80) ?? '';
+  return {
+    id,
+    title: mock.title,
+    createdAt,
+    updatedAt,
+    lastMessagePreview,
+    messageCount: messages.length,
+    messages,
+  };
+};
+
+const createInitialBucket = (withMock: boolean): ChatUserBucket => {
+  if (!withMock) {
+    return {
+      conversationsById: {},
+      order: [],
+      draftByConversationId: {},
+      persistedAt: Date.now(),
+    };
+  }
+
+  const entities = MOCK_CHAT_SESSIONS.map((session, index) =>
+    createConversationFromMock(index, session),
+  );
+  const conversationsById = Object.fromEntries(
+    entities.map(entity => [entity.id, entity]),
+  ) as Record<ConversationId, ConversationEntity>;
+  const order = [...entities]
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .map(entity => entity.id);
+
+  return {
+    conversationsById,
+    order,
+    draftByConversationId: {},
+    persistedAt: Date.now(),
+  };
+};
+
+const sortConversationOrder = (bucket: ChatUserBucket): ConversationId[] => {
+  return [...bucket.order].sort((leftId, rightId) => {
+    const left = bucket.conversationsById[leftId];
+    const right = bucket.conversationsById[rightId];
+    if (!left || !right) {
+      return 0;
+    }
+    return (
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    );
+  });
+};
+
+const withBucket = (
+  byUser: Record<string, ChatUserBucket>,
+  userId: string,
+): Record<string, ChatUserBucket> => {
+  if (byUser[userId]) {
+    return byUser;
+  }
+  return {
+    ...byUser,
+    [userId]: createInitialBucket(false),
+  };
+};
+
+const sanitizeByUser = (rawByUser: unknown): Record<string, ChatUserBucket> => {
+  if (!rawByUser || typeof rawByUser !== 'object') {
+    return {};
+  }
+
+  const now = Date.now();
+  const sanitized = Object.entries(
+    rawByUser as Record<string, ChatUserBucket>,
+  ).reduce(
+    (result, [userId, bucket]) => {
+      if (!bucket || typeof bucket !== 'object') {
+        return result;
+      }
+      if (
+        typeof bucket.persistedAt !== 'number' ||
+        now - bucket.persistedAt > CHAT_CACHE_TTL_MS
+      ) {
+        return result;
+      }
+      const conversationsById =
+        bucket.conversationsById && typeof bucket.conversationsById === 'object'
+          ? bucket.conversationsById
+          : {};
+      const order = Array.isArray(bucket.order)
+        ? bucket.order.filter(id => Boolean(conversationsById[id]))
+        : [];
+      result[userId] = {
+        conversationsById,
+        order,
+        draftByConversationId:
+          bucket.draftByConversationId &&
+          typeof bucket.draftByConversationId === 'object'
+            ? bucket.draftByConversationId
+            : {},
+        persistedAt: bucket.persistedAt,
+      };
+      return result;
+    },
+    {} as Record<string, ChatUserBucket>,
+  );
+
+  return sanitized;
+};
+
+const createMessageId = (
+  conversationId: ConversationId,
+  role: string,
+): string => {
+  return `${conversationId}-${role}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+};
+
+export const useChatStore = create<ChatStoreState>()(
+  persist(
+    (set, get) => ({
+      activeUserId: DEFAULT_USER_ID,
+      byUser: {
+        [DEFAULT_USER_ID]: createInitialBucket(true),
+      },
+      setActiveUser: userId => {
+        if (!userId) {
+          return;
+        }
+        set(state => {
+          const byUser = withBucket(state.byUser, userId);
+          return {
+            activeUserId: userId,
+            byUser,
+          };
+        });
+      },
+      ensureConversation: conversationId => {
+        set(state => {
+          const userId = state.activeUserId;
+          const existingBucket =
+            state.byUser[userId] ?? createInitialBucket(false);
+          if (existingBucket.conversationsById[conversationId]) {
+            return state;
+          }
+          const timestamp = nowIso();
+          const entity: ConversationEntity = {
+            id: conversationId,
+            title: '新对话',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            lastMessagePreview: '',
+            messageCount: 0,
+            messages: [],
+          };
+          const nextBucket: ChatUserBucket = {
+            ...existingBucket,
+            conversationsById: {
+              ...existingBucket.conversationsById,
+              [conversationId]: entity,
+            },
+            order: [
+              conversationId,
+              ...existingBucket.order.filter(id => id !== conversationId),
+            ],
+            persistedAt: Date.now(),
+          };
+          return {
+            byUser: {
+              ...state.byUser,
+              [userId]: nextBucket,
+            },
+          };
+        });
+      },
+      createConversation: () => {
+        const id = createConversationId();
+        get().ensureConversation(id);
+        return id;
+      },
+      setDraft: (conversationId, draft) => {
+        set(state => {
+          const userId = state.activeUserId;
+          const existingBucket =
+            state.byUser[userId] ?? createInitialBucket(false);
+          const nextBucket: ChatUserBucket = {
+            ...existingBucket,
+            draftByConversationId: {
+              ...existingBucket.draftByConversationId,
+              [conversationId]: draft,
+            },
+            persistedAt: Date.now(),
+          };
+          return {
+            byUser: {
+              ...state.byUser,
+              [userId]: nextBucket,
+            },
+          };
+        });
+      },
+      appendMessage: (conversationId, message) => {
+        set(state => {
+          const userId = state.activeUserId;
+          const existingBucket =
+            state.byUser[userId] ?? createInitialBucket(false);
+          const currentConversation =
+            existingBucket.conversationsById[conversationId];
+          const baseConversation: ConversationEntity =
+            currentConversation ??
+            ({
+              id: conversationId,
+              title: '新对话',
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              lastMessagePreview: '',
+              messageCount: 0,
+              messages: [],
+            } as ConversationEntity);
+
+          const createdAt = message.createdAt ?? nowIso();
+          const nextMessage: ConversationMessage = {
+            ...message,
+            createdAt,
+          };
+          const nextMessages = [...baseConversation.messages, nextMessage];
+          const lastMessagePreview = nextMessage.content.slice(0, 80);
+          const nextTitle =
+            baseConversation.messageCount === 0 && nextMessage.role === 'user'
+              ? lastMessagePreview || '新对话'
+              : baseConversation.title;
+          const updatedAt = nowIso();
+          const nextConversation: ConversationEntity = {
+            ...baseConversation,
+            title: nextTitle,
+            updatedAt,
+            lastMessagePreview,
+            messageCount: nextMessages.length,
+            messages: nextMessages,
+          };
+          const nextBucket: ChatUserBucket = {
+            ...existingBucket,
+            conversationsById: {
+              ...existingBucket.conversationsById,
+              [conversationId]: nextConversation,
+            },
+            order: sortConversationOrder({
+              ...existingBucket,
+              conversationsById: {
+                ...existingBucket.conversationsById,
+                [conversationId]: nextConversation,
+              },
+              order: [
+                conversationId,
+                ...existingBucket.order.filter(id => id !== conversationId),
+              ],
+            }),
+            persistedAt: Date.now(),
+          };
+          return {
+            byUser: {
+              ...state.byUser,
+              [userId]: nextBucket,
+            },
+          };
+        });
+      },
+      sendMockConversationTurn: (conversationId, content) => {
+        const userMessageId = createMessageId(conversationId, 'user');
+        get().appendMessage(conversationId, {
+          id: userMessageId,
+          role: 'user',
+          content,
+          status: 'complete',
+        });
+        const assistantMessageId = createMessageId(conversationId, 'assistant');
+        get().appendMessage(conversationId, {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: STATIC_AI_REPLY,
+          status: 'complete',
+        });
+      },
+    }),
+    {
+      name: CHAT_STORE_KEY,
+      version: CHAT_CACHE_SCHEMA_VERSION,
+      storage: createJSONStorage(() => localStorage),
+      partialize: state => ({
+        activeUserId: state.activeUserId,
+        byUser: state.byUser,
+      }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<
+          Pick<ChatStoreState, 'activeUserId' | 'byUser'>
+        >;
+        const sanitizedByUser = sanitizeByUser(persisted.byUser);
+        const activeUserId =
+          persisted.activeUserId || currentState.activeUserId;
+        const withActive = withBucket(sanitizedByUser, activeUserId);
+        if (Object.keys(withActive).length === 0) {
+          return currentState;
+        }
+        return {
+          ...currentState,
+          activeUserId,
+          byUser: withActive,
+        };
+      },
+    },
+  ),
+);
+
+export const selectConversationSummaries = (
+  state: ChatStoreState,
+): ConversationSummary[] => {
+  const bucket = state.byUser[state.activeUserId];
+  if (!bucket) {
+    return [];
+  }
+  return bucket.order
+    .map(id => bucket.conversationsById[id])
+    .filter(Boolean)
+    .map(conversation => ({
+      id: conversation.id,
+      title: conversation.title,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      lastMessagePreview: conversation.lastMessagePreview,
+      messageCount: conversation.messageCount,
+      pinned: conversation.pinned,
+      archived: conversation.archived,
+    }));
+};
+
+export const selectConversationMessages = (
+  state: ChatStoreState,
+  conversationId: ConversationId | null,
+): ConversationMessage[] => {
+  if (!conversationId) {
+    return [];
+  }
+  const bucket = state.byUser[state.activeUserId];
+  return bucket?.conversationsById[conversationId]?.messages ?? [];
+};
+
+export const getResolvedUserId = (search: string): string => {
+  const params = new URLSearchParams(search);
+  const queryUserId = params.get('userId') || params.get('user');
+  if (queryUserId) {
+    return queryUserId;
+  }
+  if (typeof window === 'undefined') {
+    return DEFAULT_USER_ID;
+  }
+  const storedUserId = window.localStorage.getItem('chat:userId');
+  if (storedUserId) {
+    return storedUserId;
+  }
+  return DEFAULT_USER_ID;
+};
