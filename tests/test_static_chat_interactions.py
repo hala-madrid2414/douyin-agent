@@ -1,5 +1,7 @@
+import json
 import os
 import re
+import time
 from playwright.sync_api import Page, expect
 
 
@@ -25,11 +27,12 @@ def _get_chat_store_state(page: Page) -> dict:
 
 
 def _set_chat_store(page: Page, payload: dict) -> None:
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    key_json = json.dumps(CHAT_STORAGE_KEY)
     page.add_init_script(
-        """({ key, payload }) => {
-            window.localStorage.setItem(key, JSON.stringify(payload));
-        }""",
-        {"key": CHAT_STORAGE_KEY, "payload": payload},
+        f"""(() => {{
+            window.localStorage.setItem({key_json}, JSON.stringify({payload_json}));
+        }})()""",
     )
 
 
@@ -90,14 +93,15 @@ def test_send_message_appends_user_and_fixed_ai_reply(page: Page):
 def test_new_chat_clears_messages_and_shows_welcome(page: Page):
     """
     [用例ID]: TC_CHAT_003
-    [用例名称]: 新对话可清空当前对话并回到欢迎态
+    [用例名称]: 新对话进入空会话后再次点击会提示并跳过创建
     [优先级]: High
     [前置条件]: 1. 本地服务已启动
     [测试步骤]:
         1. 访问首页并进入任一历史会话
         2. 点击“新对话”
-        3. 验证欢迎视图出现且消息列表不展示
-    [预期结果]: 新对话清空对话并回到欢迎态
+        3. 再次点击“新对话”
+        4. 验证弹窗提示出现、路由与会话数量保持不变
+    [预期结果]: 新对话回到欢迎态；已在新会话时不会重复创建会话
     """
     page.goto(BASE_URL)
 
@@ -105,10 +109,40 @@ def test_new_chat_clears_messages_and_shows_welcome(page: Page):
     expect(page.get_by_test_id("message-list")).to_be_visible()
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
 
-    page.get_by_role("button", name="新对话").click()
+    page.locator("button.new-chat-btn").click()
     expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
     expect(page.get_by_test_id("message-list")).not_to_be_visible()
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
+    first_new_chat_url = page.url
+    first_state = _get_chat_store_state(page)
+    first_active_user = first_state.get("activeUserId", "mock-user")
+    first_conversation_total = len(
+        first_state.get("byUser", {})
+        .get(first_active_user, {})
+        .get("conversationsById", {})
+    )
+
+    page.locator("button.new-chat-btn").click()
+    expect(
+        page.locator(".ant-modal-confirm-title", has_text="已在新对话中")
+    ).to_be_visible()
+    expect(
+        page.locator(
+            ".ant-modal-confirm-content",
+            has_text="当前已经是新对话，无需重复创建。",
+        )
+    ).to_be_visible()
+    page.get_by_role("button", name="知道了").click()
+    expect(page).to_have_url(first_new_chat_url)
+
+    second_state = _get_chat_store_state(page)
+    second_active_user = second_state.get("activeUserId", "mock-user")
+    second_conversation_total = len(
+        second_state.get("byUser", {})
+        .get(second_active_user, {})
+        .get("conversationsById", {})
+    )
+    assert second_conversation_total == first_conversation_total
 
 
 def test_refresh_keeps_route_and_restores_messages(page: Page):
@@ -192,7 +226,7 @@ def test_send_message_updates_conversation_summary_and_timestamp(page: Page):
     """
     page.goto(BASE_URL)
 
-    page.get_by_role("button", name="新对话").click()
+    page.locator("button.new-chat-btn").click()
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
     conversation_url = page.url
     conversation_id = conversation_url.rstrip("/").split("/")[-1]
@@ -214,7 +248,9 @@ def test_send_message_updates_conversation_summary_and_timestamp(page: Page):
     input_box.press("Enter")
 
     expect(page.get_by_test_id("message-list")).to_be_visible()
-    expect(page.get_by_text(user_text, exact=True)).to_be_visible()
+    expect(
+        page.get_by_test_id("message-list").get_by_text(user_text, exact=True)
+    ).to_be_visible()
     expect(page.get_by_text(AI_REPLY_SUBSTRING)).to_be_visible()
 
     after_store = _get_chat_store_state(page)
@@ -245,7 +281,7 @@ def test_cache_schema_version_mismatch_invalidates_persisted_state(page: Page):
     [预期结果]: 旧缓存被丢弃，默认历史会话可见
     """
     legacy_title = "schema-legacy-session"
-    now_ms = 1730000000000
+    now_ms = int(time.time() * 1000)
     _set_chat_store(
         page,
         {
@@ -359,3 +395,206 @@ def test_invalid_chat_id_redirects_to_safe_fallback(page: Page):
     expect(page).not_to_have_url(INVALID_CHAT_ROUTE_PATTERN)
     expect(page).to_have_url(re.compile(r".*/\?userId=fallback-user$"))
     expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+
+
+def test_duplicate_order_ids_are_deduplicated_for_history_render(page: Page):
+    """
+    [用例ID]: TC_CHAT_010
+    [用例名称]: 持久化中的重复 order ID 会被去重避免历史项重复
+    [优先级]: High
+    [前置条件]: 1. 本地服务已启动
+    [测试步骤]:
+        1. 预写入包含重复会话 ID 的缓存
+        2. 打开首页并检查历史项展示
+        3. 校验路由切换与 store 中 order 已去重
+    [预期结果]: 历史列表不出现重复项，store 的 order 仅保留唯一 ID
+    """
+    duplicate_user_id = "uDedupe"
+    duplicate_conversation_id = "17000000000007777"
+    duplicate_title = "duplicate-history-item"
+    now_ms = int(time.time() * 1000)
+    _set_chat_store(
+        page,
+        {
+            "state": {
+                "activeUserId": duplicate_user_id,
+                "byUser": {
+                    duplicate_user_id: {
+                        "conversationsById": {
+                            duplicate_conversation_id: {
+                                "id": duplicate_conversation_id,
+                                "title": duplicate_title,
+                                "createdAt": "2024-01-01T00:00:00.000Z",
+                                "updatedAt": "2024-01-01T00:00:00.000Z",
+                                "lastMessagePreview": duplicate_title,
+                                "messageCount": 1,
+                                "messages": [
+                                    {
+                                        "id": "duplicate-m1",
+                                        "role": "user",
+                                        "content": duplicate_title,
+                                        "createdAt": "2024-01-01T00:00:00.000Z",
+                                    }
+                                ],
+                            }
+                        },
+                        "order": [
+                            duplicate_conversation_id,
+                            duplicate_conversation_id,
+                            duplicate_conversation_id,
+                        ],
+                        "draftByConversationId": {},
+                        "persistedAt": now_ms,
+                    }
+                },
+            },
+            "version": CHAT_CACHE_SCHEMA_VERSION,
+        },
+    )
+
+    page.goto(f"{BASE_URL}?userId={duplicate_user_id}")
+
+    expect(page.get_by_text(duplicate_title, exact=True)).to_have_count(1)
+    page.get_by_text(duplicate_title, exact=True).click()
+    expect(page).to_have_url(
+        re.compile(rf".*/chat/17000000000007777\?userId={duplicate_user_id}$")
+    )
+
+
+def test_mock_user_duplicate_order_recovers_builtin_history(page: Page):
+    """
+    [用例ID]: TC_CHAT_011
+    [用例名称]: mock-user 缓存存在重复 order 时回退内置静态历史
+    [优先级]: High
+    [前置条件]: 1. 本地服务已启动
+    [测试步骤]:
+        1. 预写入 mock-user 的脏缓存（重复 order + 非内置会话）
+        2. 打开首页
+        3. 校验脏会话不显示，且内置静态历史正常展示
+    [预期结果]: 检测到重复 order 后自动回退到内置静态历史，避免重复与脏数据污染
+    """
+    now_ms = int(time.time() * 1000)
+    _set_chat_store(
+        page,
+        {
+            "state": {
+                "activeUserId": "mock-user",
+                "byUser": {
+                    "mock-user": {
+                        "conversationsById": {
+                            "17000000000000004": {
+                                "id": "17000000000000004",
+                                "title": "TypeScript 泛型解析",
+                                "createdAt": "2024-01-01T00:00:00.000Z",
+                                "updatedAt": "2024-01-01T00:00:00.000Z",
+                                "lastMessagePreview": "TypeScript 泛型解析",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                            "17000000000006666": {
+                                "id": "17000000000006666",
+                                "title": "脏数据会话",
+                                "createdAt": "2024-01-02T00:00:00.000Z",
+                                "updatedAt": "2024-01-02T00:00:00.000Z",
+                                "lastMessagePreview": "脏数据会话",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                        },
+                        "order": [
+                            "17000000000000004",
+                            "17000000000000004",
+                            "17000000000006666",
+                        ],
+                        "draftByConversationId": {},
+                        "persistedAt": now_ms,
+                    }
+                },
+            },
+            "version": CHAT_CACHE_SCHEMA_VERSION,
+        },
+    )
+
+    page.goto(BASE_URL)
+
+    expect(page.get_by_text("脏数据会话", exact=True)).not_to_be_visible()
+    expect(page.get_by_text("TypeScript 泛型解析", exact=True)).to_have_count(1)
+    expect(page.get_by_text("React 基础教程", exact=True)).to_be_visible()
+    expect(page.get_by_text("Antd 自定义主题", exact=True)).to_be_visible()
+
+
+def test_mock_user_missing_order_item_recovers_lost_builtin_session(page: Page):
+    """
+    [用例ID]: TC_CHAT_012
+    [用例名称]: mock-user 缓存顺序缺口会补回丢失的内置静态会话
+    [优先级]: High
+    [前置条件]: 1. 本地服务已启动
+    [测试步骤]:
+        1. 预写入 mock-user 缓存（conversationsById 含 4 条内置会话，但 order 缺少 17xxx3）
+        2. 打开首页
+        3. 校验“如何使用 Vite 部署”可见
+    [预期结果]: 不会因为 order 缺口丢失内置静态会话
+    """
+    now_ms = int(time.time() * 1000)
+    _set_chat_store(
+        page,
+        {
+            "state": {
+                "activeUserId": "mock-user",
+                "byUser": {
+                    "mock-user": {
+                        "conversationsById": {
+                            "17000000000000001": {
+                                "id": "17000000000000001",
+                                "title": "React 基础教程",
+                                "createdAt": "2024-01-01T00:00:00.000Z",
+                                "updatedAt": "2024-01-01T00:00:00.000Z",
+                                "lastMessagePreview": "React 基础教程",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                            "17000000000000002": {
+                                "id": "17000000000000002",
+                                "title": "Antd 自定义主题",
+                                "createdAt": "2024-01-02T00:00:00.000Z",
+                                "updatedAt": "2024-01-02T00:00:00.000Z",
+                                "lastMessagePreview": "Antd 自定义主题",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                            "17000000000000003": {
+                                "id": "17000000000000003",
+                                "title": "如何使用 Vite 部署",
+                                "createdAt": "2024-01-03T00:00:00.000Z",
+                                "updatedAt": "2024-01-03T00:00:00.000Z",
+                                "lastMessagePreview": "如何使用 Vite 部署",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                            "17000000000000004": {
+                                "id": "17000000000000004",
+                                "title": "TypeScript 泛型解析",
+                                "createdAt": "2024-01-04T00:00:00.000Z",
+                                "updatedAt": "2024-01-04T00:00:00.000Z",
+                                "lastMessagePreview": "TypeScript 泛型解析",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                        },
+                        "order": [
+                            "17000000000000001",
+                            "17000000000000002",
+                            "17000000000000004",
+                        ],
+                        "draftByConversationId": {},
+                        "persistedAt": now_ms,
+                    }
+                },
+            },
+            "version": CHAT_CACHE_SCHEMA_VERSION,
+        },
+    )
+
+    page.goto(BASE_URL)
+
+    expect(page.get_by_text("如何使用 Vite 部署", exact=True)).to_be_visible()

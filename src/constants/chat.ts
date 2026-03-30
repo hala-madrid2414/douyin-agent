@@ -145,4 +145,5 @@ export const MOCK_CHAT_SESSIONS: ChatSession[] = [
       { id: 'history-4-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
+  
 ];

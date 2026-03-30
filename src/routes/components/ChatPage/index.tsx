@@ -6,6 +6,7 @@ import { getResolvedUserId, useChatStore } from '@/stores/chatStore';
 import type { ConversationSummary } from '@/types/session';
 import { isConversationId } from '@/utils/conversationId';
 import { useLocation, useNavigate } from '@modern-js/runtime/router';
+import { Modal } from 'antd';
 import { useEffect, useMemo } from 'react';
 import '../../index.less';
 
@@ -47,7 +48,15 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
     if (!activeBucket) {
       return [];
     }
+    const seenIds = new Set<string>();
     return activeBucket.order
+      .filter(id => {
+        if (seenIds.has(id)) {
+          return false;
+        }
+        seenIds.add(id);
+        return true;
+      })
       .map(id => activeBucket.conversationsById[id])
       .filter(Boolean)
       .map(conversation => ({
@@ -97,19 +106,38 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
   ]);
 
   const handleSelectSession = (conversationId: string) => {
-    navigate(`/chat/${conversationId}${querySuffix}`);
+    const targetPath = `/chat/${conversationId}${querySuffix}`;
+    if (`${location.pathname}${location.search}` === targetPath) {
+      return;
+    }
+    navigate(targetPath);
   };
 
   const handleNewChat = () => {
+    if (normalizedConversationId && messages.length === 0) {
+      Modal.info({
+        title: '已在新对话中',
+        content: '当前已经是新对话，无需重复创建。',
+        okText: '知道了',
+      });
+      return;
+    }
     const nextId = createConversation();
-    navigate(`/chat/${nextId}${querySuffix}`);
+    const targetPath = `/chat/${nextId}${querySuffix}`;
+    if (`${location.pathname}${location.search}` === targetPath) {
+      return;
+    }
+    navigate(targetPath);
   };
 
   const handleSend = (content: string) => {
     const targetConversationId =
       normalizedConversationId ?? createConversation();
     if (!normalizedConversationId) {
-      navigate(`/chat/${targetConversationId}${querySuffix}`);
+      const targetPath = `/chat/${targetConversationId}${querySuffix}`;
+      if (`${location.pathname}${location.search}` !== targetPath) {
+        navigate(targetPath);
+      }
     }
     sendMockConversationTurn(targetConversationId, content);
   };

@@ -116,8 +116,19 @@ const createInitialBucket = (withMock: boolean): ChatUserBucket => {
   };
 };
 
+const dedupeConversationOrder = (order: ConversationId[]): ConversationId[] => {
+  const seen = new Set<ConversationId>();
+  return order.filter(id => {
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+};
+
 const sortConversationOrder = (bucket: ChatUserBucket): ConversationId[] => {
-  return [...bucket.order].sort((leftId, rightId) => {
+  return dedupeConversationOrder(bucket.order).sort((leftId, rightId) => {
     const left = bucket.conversationsById[leftId];
     const right = bucket.conversationsById[rightId];
     if (!left || !right) {
@@ -165,12 +176,35 @@ const sanitizeByUser = (rawByUser: unknown): Record<string, ChatUserBucket> => {
         bucket.conversationsById && typeof bucket.conversationsById === 'object'
           ? bucket.conversationsById
           : {};
-      const order = Array.isArray(bucket.order)
-        ? bucket.order.filter(id => Boolean(conversationsById[id]))
+      const rawOrder = Array.isArray(bucket.order)
+        ? bucket.order.filter(
+            (id): id is ConversationId =>
+              typeof id === 'string' && Boolean(conversationsById[id]),
+          )
         : [];
+      const order = dedupeConversationOrder(rawOrder);
+      if (userId === DEFAULT_USER_ID && order.length !== rawOrder.length) {
+        result[userId] = createInitialBucket(true);
+        return result;
+      }
+      const completedOrder = dedupeConversationOrder([
+        ...order,
+        ...Object.keys(conversationsById).filter(
+          (id): id is ConversationId => typeof id === 'string',
+        ),
+      ]);
       result[userId] = {
         conversationsById,
-        order,
+        order: sortConversationOrder({
+          conversationsById,
+          order: completedOrder,
+          draftByConversationId:
+            bucket.draftByConversationId &&
+            typeof bucket.draftByConversationId === 'object'
+              ? bucket.draftByConversationId
+              : {},
+          persistedAt: bucket.persistedAt,
+        }),
         draftByConversationId:
           bucket.draftByConversationId &&
           typeof bucket.draftByConversationId === 'object'
