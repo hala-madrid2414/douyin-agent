@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+from pathlib import Path
 from playwright.sync_api import Page, expect
 
 
@@ -12,6 +13,7 @@ CHAT_STORAGE_KEY = "chat-store"
 CHAT_CACHE_SCHEMA_VERSION = 1
 CHAT_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
 INVALID_CHAT_ROUTE_PATTERN = re.compile(r".*/chat/[^/]+$")
+CHAT_CONSTANTS_PATH = Path(__file__).resolve().parents[1] / "src" / "constants" / "chat.ts"
 
 
 def _get_chat_store_state(page: Page) -> dict:
@@ -29,11 +31,33 @@ def _get_chat_store_state(page: Page) -> dict:
 def _set_chat_store(page: Page, payload: dict) -> None:
     payload_json = json.dumps(payload, ensure_ascii=False)
     key_json = json.dumps(CHAT_STORAGE_KEY)
+    user_id = (
+        payload.get("state", {}).get("activeUserId")
+        if isinstance(payload, dict)
+        else None
+    )
+    user_id_json = json.dumps(user_id, ensure_ascii=False)
     page.add_init_script(
         f"""(() => {{
             window.localStorage.setItem({key_json}, JSON.stringify({payload_json}));
+            if ({user_id_json}) {{
+                window.localStorage.setItem('chat:userId', {user_id_json});
+            }}
         }})()""",
     )
+
+
+def _read_mock_session_titles_from_constants() -> list[str]:
+    content = CHAT_CONSTANTS_PATH.read_text(encoding="utf-8")
+    block_match = re.search(
+        r"export const MOCK_CHAT_SESSIONS: ChatSession\[\] = \[(.*?)\n\];",
+        content,
+        re.S,
+    )
+    if not block_match:
+        return []
+    block = block_match.group(1)
+    return re.findall(r"title:\s*'([^']+)'", block)
 
 
 def test_switch_history_session_shows_messages(page: Page):
@@ -520,7 +544,7 @@ def test_mock_user_duplicate_order_recovers_builtin_history(page: Page):
     expect(page.get_by_text("脏数据会话", exact=True)).not_to_be_visible()
     expect(page.get_by_text("TypeScript 泛型解析", exact=True)).to_have_count(1)
     expect(page.get_by_text("React 基础教程", exact=True)).to_be_visible()
-    expect(page.get_by_text("Antd 自定义主题", exact=True)).to_be_visible()
+    expect(page.get_by_text("Vue Pinia 状态管理", exact=True)).to_be_visible()
 
 
 def test_mock_user_missing_order_item_recovers_lost_builtin_session(page: Page):
@@ -598,3 +622,62 @@ def test_mock_user_missing_order_item_recovers_lost_builtin_session(page: Page):
     page.goto(BASE_URL)
 
     expect(page.get_by_text("如何使用 Vite 部署", exact=True)).to_be_visible()
+
+
+def test_mock_user_stale_cache_syncs_with_current_constants_sessions(page: Page):
+    """
+    [用例ID]: TC_CHAT_013
+    [用例名称]: mock-user 的旧缓存会与当前 constants 静态会话自动对齐
+    [优先级]: High
+    [前置条件]: 1. 本地服务已启动
+    [测试步骤]:
+        1. 预写入旧缓存（包含已删除标题）
+        2. 打开首页
+        3. 校验侧边栏会话标题与 constants 的 MOCK_CHAT_SESSIONS 一致
+    [预期结果]: 默认用户不会展示旧缓存标题，展示与 constants 完全一致
+    """
+    expected_titles = _read_mock_session_titles_from_constants()
+    now_ms = int(time.time() * 1000)
+    _set_chat_store(
+        page,
+        {
+            "state": {
+                "activeUserId": "mock-user",
+                "byUser": {
+                    "mock-user": {
+                        "conversationsById": {
+                            "17000000000000001": {
+                                "id": "17000000000000001",
+                                "title": "React 基础教程",
+                                "createdAt": "2024-01-01T00:00:00.000Z",
+                                "updatedAt": "2024-01-01T00:00:00.000Z",
+                                "lastMessagePreview": "React 基础教程",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                            "17000000000000002": {
+                                "id": "17000000000000002",
+                                "title": "Antd 自定义主题",
+                                "createdAt": "2024-01-02T00:00:00.000Z",
+                                "updatedAt": "2024-01-02T00:00:00.000Z",
+                                "lastMessagePreview": "Antd 自定义主题",
+                                "messageCount": 1,
+                                "messages": [],
+                            },
+                        },
+                        "order": ["17000000000000001", "17000000000000002"],
+                        "draftByConversationId": {},
+                        "persistedAt": now_ms,
+                    }
+                },
+            },
+            "version": CHAT_CACHE_SCHEMA_VERSION,
+        },
+    )
+
+    page.goto(BASE_URL)
+    expect(page.locator("button.new-chat-btn")).to_be_visible()
+
+    for title in expected_titles:
+        assert page.get_by_text(title, exact=True).count() >= 1
+    assert page.get_by_text("Antd 自定义主题", exact=True).count() == 0

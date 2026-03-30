@@ -58,7 +58,12 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
         return true;
       })
       .map(id => activeBucket.conversationsById[id])
-      .filter(Boolean)
+      .filter(
+        conversation =>
+          conversation &&
+          (conversation.messageCount > 0 ||
+            conversation.id === normalizedConversationId),
+      )
       .map(conversation => ({
         id: conversation.id,
         title: conversation.title,
@@ -69,7 +74,7 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
         pinned: conversation.pinned,
         archived: conversation.archived,
       }));
-  }, [activeBucket]);
+  }, [activeBucket, normalizedConversationId]);
   const messages = useMemo(() => {
     if (!activeBucket || !normalizedConversationId) {
       return [];
@@ -114,16 +119,10 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
   };
 
   const handleNewChat = () => {
-    if (normalizedConversationId && messages.length === 0) {
-      Modal.info({
-        title: '已在新对话中',
-        content: '当前已经是新对话，无需重复创建。',
-        okText: '知道了',
-      });
+    if (!normalizedConversationId) {
       return;
     }
-    const nextId = createConversation();
-    const targetPath = `/chat/${nextId}${querySuffix}`;
+    const targetPath = `/${querySuffix}`;
     if (`${location.pathname}${location.search}` === targetPath) {
       return;
     }
@@ -131,9 +130,9 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
   };
 
   const handleSend = (content: string) => {
-    const targetConversationId =
-      normalizedConversationId ?? createConversation();
-    if (!normalizedConversationId) {
+    let targetConversationId = normalizedConversationId;
+    if (!targetConversationId) {
+      targetConversationId = createConversation();
       const targetPath = `/chat/${targetConversationId}${querySuffix}`;
       if (`${location.pathname}${location.search}` !== targetPath) {
         navigate(targetPath);

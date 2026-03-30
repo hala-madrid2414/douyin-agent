@@ -21,6 +21,7 @@ interface ChatUserBucket {
   order: ConversationId[];
   draftByConversationId: Record<ConversationId, string>;
   persistedAt: number;
+  seedSignature?: string;
 }
 
 interface ChatStoreState {
@@ -42,6 +43,17 @@ interface ChatStoreState {
 
 const nowIso = () => new Date().toISOString();
 
+const MOCK_SESSION_SIGNATURE = JSON.stringify(
+  MOCK_CHAT_SESSIONS.map(session => ({
+    id: session.id,
+    title: session.title,
+    messages: session.messages.map(message => ({
+      role: message.role,
+      content: message.content,
+    })),
+  })),
+);
+
 const normalizeConversationId = (
   rawId: string,
   index: number,
@@ -49,7 +61,7 @@ const normalizeConversationId = (
   if (isConversationId(rawId)) {
     return rawId;
   }
-  return `${17000000000000000 + index}`;
+  return `17${`${index}`.padStart(15, '0')}`;
 };
 
 const createConversationFromMock = (
@@ -113,6 +125,7 @@ const createInitialBucket = (withMock: boolean): ChatUserBucket => {
     order,
     draftByConversationId: {},
     persistedAt: Date.now(),
+    seedSignature: MOCK_SESSION_SIGNATURE,
   };
 };
 
@@ -182,13 +195,52 @@ const sanitizeByUser = (rawByUser: unknown): Record<string, ChatUserBucket> => {
               typeof id === 'string' && Boolean(conversationsById[id]),
           )
         : [];
-      const order = dedupeConversationOrder(rawOrder);
-      if (userId === DEFAULT_USER_ID && order.length !== rawOrder.length) {
-        result[userId] = createInitialBucket(true);
+      if (userId === DEFAULT_USER_ID) {
+        const seededBucket = createInitialBucket(true);
+        const seededIds = new Set<ConversationId>(
+          Object.keys(seededBucket.conversationsById).filter(
+            (id): id is ConversationId => typeof id === 'string',
+          ),
+        );
+        const extraConversations = Object.fromEntries(
+          Object.entries(conversationsById).filter(([id]) => !seededIds.has(id)),
+        ) as Record<ConversationId, ConversationEntity>;
+        const mergedConversationsById = {
+          ...seededBucket.conversationsById,
+          ...extraConversations,
+        };
+        const completedOrder = dedupeConversationOrder([
+          ...rawOrder.filter(id => Boolean(mergedConversationsById[id])),
+          ...seededBucket.order,
+          ...Object.keys(extraConversations).filter(
+            (id): id is ConversationId => typeof id === 'string',
+          ),
+        ]);
+        result[userId] = {
+          conversationsById: mergedConversationsById,
+          order: sortConversationOrder({
+            conversationsById: mergedConversationsById,
+            order: completedOrder,
+            draftByConversationId:
+              bucket.draftByConversationId &&
+              typeof bucket.draftByConversationId === 'object'
+                ? bucket.draftByConversationId
+                : {},
+            persistedAt: bucket.persistedAt,
+            seedSignature: MOCK_SESSION_SIGNATURE,
+          }),
+          draftByConversationId:
+            bucket.draftByConversationId &&
+            typeof bucket.draftByConversationId === 'object'
+              ? bucket.draftByConversationId
+              : {},
+          persistedAt: bucket.persistedAt,
+          seedSignature: MOCK_SESSION_SIGNATURE,
+        };
         return result;
       }
       const completedOrder = dedupeConversationOrder([
-        ...order,
+        ...rawOrder,
         ...Object.keys(conversationsById).filter(
           (id): id is ConversationId => typeof id === 'string',
         ),
@@ -211,6 +263,10 @@ const sanitizeByUser = (rawByUser: unknown): Record<string, ChatUserBucket> => {
             ? bucket.draftByConversationId
             : {},
         persistedAt: bucket.persistedAt,
+        seedSignature:
+          typeof bucket.seedSignature === 'string'
+            ? bucket.seedSignature
+            : undefined,
       };
       return result;
     },
@@ -424,6 +480,7 @@ export const useChatStore = create<ChatStoreState>()(
 
 export const selectConversationSummaries = (
   state: ChatStoreState,
+  normalizedConversationId?: string | null,
 ): ConversationSummary[] => {
   const bucket = state.byUser[state.activeUserId];
   if (!bucket) {
@@ -431,7 +488,12 @@ export const selectConversationSummaries = (
   }
   return bucket.order
     .map(id => bucket.conversationsById[id])
-    .filter(Boolean)
+    .filter(
+      conversation =>
+        conversation &&
+        (conversation.messageCount > 0 ||
+          conversation.id === normalizedConversationId),
+    )
     .map(conversation => ({
       id: conversation.id,
       title: conversation.title,

@@ -100,9 +100,9 @@ export const QUICK_PROMPTS: Prompt[] = [
 // 历史会话 Mock 数据
 export const CHAT_HISTORY: ChatHistoryItem[] = [
   { id: 'history-1', title: 'React 基础教程', time: '2小时前' },
-  { id: 'history-2', title: 'Antd 自定义主题', time: '昨天' },
   { id: 'history-3', title: '如何使用 Vite 部署', time: '3天前' },
   { id: 'history-4', title: 'TypeScript 泛型解析', time: '1周前' },
+  { id: 'history-5', title: 'Vue Pinia 状态管理', time: '2周前' },
 ];
 
 export const STATIC_AI_REPLY =
@@ -119,12 +119,16 @@ export const MOCK_CHAT_SESSIONS: ChatSession[] = [
     ],
   },
   {
-    id: 'history-2',
-    title: 'Antd 自定义主题',
-    time: '昨天',
+    id: 'history-5',
+    title: 'Vue Pinia 状态管理',
+    time: '2周前',
     messages: [
-      { id: 'history-2-m1', role: 'user', content: 'Antd 如何做主题定制？' },
-      { id: 'history-2-m2', role: 'assistant', content: STATIC_AI_REPLY },
+      {
+        id: 'history-5-m1',
+        role: 'user',
+        content: 'Vue3 中 Pinia 与组合式 API 怎么配合？',
+      },
+      { id: 'history-5-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
   {
