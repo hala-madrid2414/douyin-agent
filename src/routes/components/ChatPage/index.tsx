@@ -22,9 +22,7 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
   const setActiveUser = useChatStore(state => state.setActiveUser);
   const createConversation = useChatStore(state => state.createConversation);
   const ensureConversation = useChatStore(state => state.ensureConversation);
-  const sendMockConversationTurn = useChatStore(
-    state => state.sendMockConversationTurn,
-  );
+  const sendMessage = useChatStore(state => state.sendMessage);
 
   const resolvedUserId = useMemo(
     () => getResolvedUserId(location.search),
@@ -138,7 +136,7 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
         navigate(targetPath);
       }
     }
-    sendMockConversationTurn(targetConversationId, content);
+    sendMessage(targetConversationId, content);
   };
 
   return (

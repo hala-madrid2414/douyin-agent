@@ -7,7 +7,9 @@ export type ChatMessageStatus =
   | 'streaming'
   | 'failed'
   | 'aborted'
-  | 'complete';
+  | 'complete'
+  | 'loading'
+  | 'error';
 
 export interface ConversationMessage {
   id: string;

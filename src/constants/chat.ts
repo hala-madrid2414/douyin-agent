@@ -36,28 +36,23 @@ export interface ChatSession {
 export const HOT_TOPICS: Topic[] = [
   {
     id: 'topic-1',
-    title: 'Ant Design 5.0 的新特性',
-    description: '了解 Ant Design 5.0 带来的全新设计语言和开发体验。',
+    title: '川西大环线自驾攻略',
+    description: '雪山、草甸、星空，探索国内最美自驾路线。',
   },
   {
     id: 'topic-2',
-    title: '使用 Ant Design X',
-    description: '如何使用 Ant Design X 快速构建 AI 驱动的交互界面。',
+    title: '哈尔滨冰雪大世界指南',
+    description: '南方小土豆的冰城漫游秘籍与保暖穿搭建议。',
   },
   {
     id: 'topic-3',
-    title: '组件按需加载',
-    description: '学习如何在项目中优雅地进行组件和样式的按需加载。',
+    title: '周末淄博烧烤特种兵',
+    description: '打卡八大局，体验最地道的人间烟火气。',
   },
   {
     id: 'topic-4',
-    title: '前端性能优化指南',
-    description: '深入了解如何提升 React 应用的加载速度和运行效率。',
-  },
-  {
-    id: 'topic-5',
-    title: 'TypeScript 高级技巧',
-    description: '掌握 TS 泛型、条件类型等进阶用法，提升代码质量。',
+    title: '阿勒泰深度游',
+    description: '走进《我的阿勒泰》，感受治愈系的新疆风光。',
   },
 ];
 
@@ -65,89 +60,88 @@ export const HOT_TOPICS: Topic[] = [
 export const DESIGN_GUIDES: Topic[] = [
   {
     id: 'guide-1',
-    title: '意图',
-    description: '理解用户需求，提供精准的 AI 响应和建议。',
-    icon: 'BulbOutlined',
+    title: '灵感',
+    description: '挖掘全网最火打卡地，提供新鲜有趣的旅行灵感。',
+    icon: 'EnvironmentOutlined',
   },
   {
     id: 'guide-2',
-    title: '角色',
-    description: '设定 AI 助手的性格和专业领域，建立信任感。',
-    icon: 'UserOutlined',
+    title: '伴游',
+    description: '化身私人定制导游，提供最地道的国内游建议。',
+    icon: 'CarOutlined',
   },
   {
     id: 'guide-3',
-    title: '对话',
-    description: '设计流畅自然的对话流，处理各种边界情况。',
-    icon: 'MessageOutlined',
+    title: '行程',
+    description: '智能规划特种兵或深度游路线，让出行更省心。',
+    icon: 'CameraOutlined',
   },
   {
     id: 'guide-4',
-    title: '界面',
-    description: '基于 Ant Design 构建一致且美观的视觉体验。',
-    icon: 'LayoutOutlined',
+    title: '路书',
+    description: '分享详细旅行路书，记录美好旅途回忆。',
+    icon: 'BookOutlined',
   },
 ];
 
 // 快捷提示词 Mock 数据
 export const QUICK_PROMPTS: Prompt[] = [
-  { id: 'prompt-1', text: '升级', icon: 'ArrowUpOutlined' },
-  { id: 'prompt-2', text: '组件', icon: 'AppstoreOutlined' },
-  { id: 'prompt-3', text: 'RICH 指南', icon: 'BookOutlined' },
-  { id: 'prompt-4', text: '安装介绍', icon: 'DownloadOutlined' },
+  { id: 'prompt-1', text: '热门推荐', icon: 'ArrowUpOutlined' },
+  { id: 'prompt-2', text: '周边游', icon: 'AppstoreOutlined' },
+  { id: 'prompt-3', text: '避坑指南', icon: 'BookOutlined' },
+  { id: 'prompt-4', text: '出行清单', icon: 'DownloadOutlined' },
 ];
 
 // 历史会话 Mock 数据
 export const CHAT_HISTORY: ChatHistoryItem[] = [
-  { id: 'history-1', title: 'React 基础教程', time: '2小时前' },
-  { id: 'history-3', title: '如何使用 Vite 部署', time: '3天前' },
-  { id: 'history-4', title: 'TypeScript 泛型解析', time: '1周前' },
-  { id: 'history-5', title: 'Vue Pinia 状态管理', time: '2周前' },
+  { id: 'history-1', title: '川西自驾线路规划', time: '2小时前' },
+  { id: 'history-3', title: '哈尔滨3天2晚攻略', time: '3天前' },
+  { id: 'history-4', title: '淄博烧烤打卡地图', time: '1周前' },
+  { id: 'history-5', title: '阿勒泰旅游注意事项', time: '2周前' },
 ];
 
 export const STATIC_AI_REPLY =
-  '收到，我会基于当前上下文为你提供清晰的步骤与示例（本次为前端 Mock 固定回复）。';
+  '收到，我会基于当前的旅行偏好为您提供详细的行程规划和游玩建议（本次为前端 Mock 固定回复）。';
 
 export const MOCK_CHAT_SESSIONS: ChatSession[] = [
   {
     id: 'history-1',
-    title: 'React 基础教程',
+    title: '川西自驾线路规划',
     time: '2小时前',
     messages: [
-      { id: 'history-1-m1', role: 'user', content: '帮我回顾一下 React 的核心概念。' },
+      { id: 'history-1-m1', role: 'user', content: '我想去川西自驾，大概5天时间，有什么推荐的路线吗？' },
       { id: 'history-1-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
   {
     id: 'history-5',
-    title: 'Vue Pinia 状态管理',
+    title: '阿勒泰旅游注意事项',
     time: '2周前',
     messages: [
       {
         id: 'history-5-m1',
         role: 'user',
-        content: 'Vue3 中 Pinia 与组合式 API 怎么配合？',
+        content: '去新疆阿勒泰玩，温差大吗？需要准备什么衣服？',
       },
       { id: 'history-5-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
   {
     id: 'history-3',
-    title: '如何使用 Vite 部署',
+    title: '哈尔滨3天2晚攻略',
     time: '3天前',
     messages: [
-      { id: 'history-3-m1', role: 'user', content: 'Vite 构建后如何部署到静态站点？' },
+      { id: 'history-3-m1', role: 'user', content: '南方人第一次去哈尔滨，冰雪大世界和洗浴中心怎么安排比较好？' },
       { id: 'history-3-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
   {
     id: 'history-4',
-    title: 'TypeScript 泛型解析',
+    title: '淄博烧烤打卡地图',
     time: '1周前',
     messages: [
-      { id: 'history-4-m1', role: 'user', content: '解释一下泛型约束和默认类型参数。' },
+      { id: 'history-4-m1', role: 'user', content: '周末想做一回特种兵去淄博吃烧烤，八大局周边有什么推荐的店铺？' },
       { id: 'history-4-m2', role: 'assistant', content: STATIC_AI_REPLY },
     ],
   },
-  
 ];

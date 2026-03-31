@@ -35,9 +35,14 @@ interface ChatStoreState {
     conversationId: ConversationId,
     message: Omit<ConversationMessage, 'createdAt'> & { createdAt?: string },
   ) => void;
-  sendMockConversationTurn: (
+  sendMessage: (
     conversationId: ConversationId,
     content: string,
+  ) => Promise<void>;
+  updateMessage: (
+    conversationId: ConversationId,
+    messageId: string,
+    updates: Partial<ConversationMessage>,
   ) => void;
 }
 
@@ -432,20 +437,107 @@ export const useChatStore = create<ChatStoreState>()(
           };
         });
       },
-      sendMockConversationTurn: (conversationId, content) => {
+      sendMessage: async (
+        conversationId: ConversationId,
+        content: string,
+      ) => {
         const userMessageId = createMessageId(conversationId, 'user');
+        // 1. 追加用户消息并设为 loading
         get().appendMessage(conversationId, {
           id: userMessageId,
           role: 'user',
           content,
           status: 'complete',
         });
+        
         const assistantMessageId = createMessageId(conversationId, 'assistant');
         get().appendMessage(conversationId, {
           id: assistantMessageId,
           role: 'assistant',
-          content: STATIC_AI_REPLY,
-          status: 'complete',
+          content: '',
+          status: 'loading',
+        });
+
+        try {
+          // 2. 调用真实的 BFF 接口
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ conversationId, content }),
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok && result.code === 200) {
+            // 3. 成功，更新 AI 回复
+            get().updateMessage(conversationId, assistantMessageId, {
+              content: result.data.content,
+              status: 'complete',
+            });
+          } else {
+            // 4. 业务错误
+            get().updateMessage(conversationId, assistantMessageId, {
+              content: result.message || '暂时无法为你规划行程，请稍后重试',
+              status: 'error',
+            });
+          }
+        } catch (error) {
+          // 5. 网络或其它异常
+          console.error('Failed to send message:', error);
+          get().updateMessage(conversationId, assistantMessageId, {
+            content: '暂时无法为你规划行程，请稍后重试',
+            status: 'error',
+          });
+        }
+      },
+      updateMessage: (
+        conversationId: ConversationId,
+        messageId: string,
+        updates: Partial<ConversationMessage>,
+      ) => {
+        set(state => {
+          const userId = state.activeUserId;
+          const bucket = state.byUser[userId];
+          if (!bucket) return state;
+
+          const conversation = bucket.conversationsById[conversationId];
+          if (!conversation) return state;
+
+          const nextMessages = conversation.messages.map(msg =>
+            msg.id === messageId ? { ...msg, ...updates } : msg
+          );
+
+          const nextConversation = {
+            ...conversation,
+            messages: nextMessages,
+            updatedAt: nowIso(),
+            lastMessagePreview:
+              nextMessages[nextMessages.length - 1]?.content.slice(0, 80) ||
+              conversation.lastMessagePreview,
+          };
+
+          return {
+            byUser: {
+              ...state.byUser,
+              [userId]: {
+                ...bucket,
+                conversationsById: {
+                  ...bucket.conversationsById,
+                  [conversationId]: nextConversation,
+                },
+                order: sortConversationOrder({
+                  ...bucket,
+                  conversationsById: {
+                    ...bucket.conversationsById,
+                    [conversationId]: nextConversation,
+                  },
+                  order: bucket.order,
+                }),
+              },
+            },
+          };
         });
       },
     }),
