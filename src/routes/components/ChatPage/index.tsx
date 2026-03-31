@@ -154,7 +154,7 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
       <div className="main-content">
         <div className="content-scroll-area">
           {messages.length === 0 ? (
-            <WelcomeView />
+            <WelcomeView onPromptClick={handleSend} />
           ) : (
             <MessageList messages={messages} />
           )}

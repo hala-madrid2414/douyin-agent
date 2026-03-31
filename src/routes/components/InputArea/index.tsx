@@ -9,7 +9,8 @@ import {
 } from '@ant-design/icons';
 import { Prompts, Sender } from '@ant-design/x';
 import { Button } from 'antd';
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import './InputArea.less';
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -48,6 +49,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
             const prompt = QUICK_PROMPTS.find(p => p.id === info.data.key);
             if (prompt) {
               setValue(prompt.text);
+              handleSend(prompt.text);
             }
           }}
           wrap

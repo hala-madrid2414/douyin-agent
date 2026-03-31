@@ -62,7 +62,11 @@ const items: PromptsProps['items'] = [
   },
 ];
 
-const WelcomeView: React.FC = () => {
+export interface WelcomeViewProps {
+  onPromptClick?: (content: string) => void;
+}
+
+const WelcomeView: React.FC<WelcomeViewProps> = ({ onPromptClick }) => {
   return (
     <div className="welcome-view">
       {/* 头部区域 */}
@@ -100,6 +104,17 @@ const WelcomeView: React.FC = () => {
           items={items}
           wrap
           className="custom-prompts-nested"
+          onItemClick={info => {
+            const hotTopic = HOT_TOPICS.find(t => t.id === info.data.key);
+            if (hotTopic && onPromptClick) {
+              onPromptClick(hotTopic.title);
+              return;
+            }
+            const guide = DESIGN_GUIDES.find(g => g.id === info.data.key);
+            if (guide && onPromptClick) {
+              onPromptClick(guide.title);
+            }
+          }}
         />
       </div>
     </div>
