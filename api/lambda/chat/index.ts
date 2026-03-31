@@ -6,6 +6,8 @@ const SYSTEM_PROMPT = `你是一个专属旅行助手，专门为用户提供专
 
 export const post = async ({ data }: { data: { conversationId: string; content: string } }) => {
   const apiKey = process.env.DASHSCOPE_API_KEY || process.env.API_KEY || '';
+  const baseURL = process.env.LLM_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const model = process.env.LLM_MODEL || 'qwen3-max';
   
   if (!apiKey) {
     return {
@@ -17,12 +19,12 @@ export const post = async ({ data }: { data: { conversationId: string; content: 
 
   const openai = new OpenAI({
     apiKey: apiKey,
-    baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    baseURL: baseURL,
   });
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'qwen3-max', // Or qwen3-max as requested
+      model: model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: data.content },
