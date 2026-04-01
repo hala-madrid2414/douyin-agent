@@ -74,12 +74,12 @@ def test_switch_history_session_shows_messages(page: Page):
     """
     page.goto(BASE_URL)
 
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
-    page.get_by_text("React 基础教程", exact=True).click()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
+    page.get_by_text("川西自驾线路规划", exact=True).click()
 
-    expect(page.get_by_text("你好，我是 Ant Design X")).not_to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).not_to_be_visible()
     expect(page.get_by_test_id("message-list")).to_be_visible()
-    expect(page.get_by_text("帮我回顾一下 React 的核心概念。")).to_be_visible()
+    expect(page.get_by_text("我想去川西自驾，大概5天时间，有什么推荐的路线吗？")).to_be_visible()
     expect(page.get_by_text(AI_REPLY_SUBSTRING)).to_be_visible()
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
 
@@ -105,7 +105,7 @@ def test_send_message_appends_user_and_fixed_ai_reply(page: Page):
     input_box.fill(user_text)
     input_box.press("Enter")
 
-    expect(page.get_by_text("你好，我是 Ant Design X")).not_to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).not_to_be_visible()
     expect(page.get_by_test_id("message-list")).to_be_visible()
     expect(
         page.get_by_test_id("message-list").get_by_text(user_text, exact=True)
@@ -134,7 +134,7 @@ def test_new_chat_clears_messages_and_shows_welcome(page: Page):
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
 
     page.locator("button.new-chat-btn").click()
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
     expect(page.get_by_test_id("message-list")).not_to_be_visible()
     expect(page).to_have_url(CHAT_ROUTE_PATTERN)
     first_new_chat_url = page.url
@@ -226,7 +226,7 @@ def test_user_namespace_isolation(page: Page):
 
     page.goto(f"{BASE_URL}?userId=uB")
     expect(page.get_by_text(private_text, exact=True)).not_to_be_visible()
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
 
     page.goto(f"{BASE_URL}?userId=uA")
     page.get_by_text(private_text, exact=True).first.click()
@@ -264,7 +264,7 @@ def test_send_message_updates_conversation_summary_and_timestamp(page: Page):
         .get(conversation_id, {})
     )
     before_updated_at = before_conversation.get("updatedAt")
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
 
     user_text = "摘要时间戳更新校验"
     input_box = page.get_by_placeholder("提问或输入 / 使用技能")
@@ -399,7 +399,7 @@ def test_cache_ttl_expired_invalidates_persisted_state(page: Page):
     page.goto(f"{BASE_URL}?userId=uTTL")
 
     expect(page.get_by_text(expired_title, exact=True)).not_to_be_visible()
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
 
 
 def test_invalid_chat_id_redirects_to_safe_fallback(page: Page):
@@ -418,7 +418,7 @@ def test_invalid_chat_id_redirects_to_safe_fallback(page: Page):
 
     expect(page).not_to_have_url(INVALID_CHAT_ROUTE_PATTERN)
     expect(page).to_have_url(re.compile(r".*/\?userId=fallback-user$"))
-    expect(page.get_by_text("你好，我是 Ant Design X")).to_be_visible()
+    expect(page.get_by_text("你好，我是你的旅行搭子")).to_be_visible()
 
 
 def test_duplicate_order_ids_are_deduplicated_for_history_render(page: Page):

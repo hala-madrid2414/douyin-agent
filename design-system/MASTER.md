@@ -19,8 +19,8 @@ Built on Ant Design X and the RICH Design Paradigm (Role, Intention, Conversatio
   - `@bg-layout`: `#F8FAFC` (Slate-50) - Overall page background (e.g., left conversation list).
   - `@bg-container`: `#FFFFFF` - Chat area and card backgrounds.
 - **Message Colors**:
-  - **User Message**: Background `@primary-color` (`#0891B2`), Text `#FFFFFF`.
-  - **AI Message (Agent)**: Background `#F1F5F9` (Slate-100), Text `#0F172A`.
+  - **User Message (Bubble)**: Background `@primary-color` (`#0891B2`), Text `#FFFFFF`.
+  - **AI Message (Plain Text)**: No background, Text `#0F172A`.
 
 ## 2. Typography System
 - **Font Family**: Prioritize system sans-serif fonts.
@@ -32,7 +32,7 @@ Built on Ant Design X and the RICH Design Paradigm (Role, Intention, Conversatio
   - **Body Text**: `14px`, Line Height `1.6`, Weight `400` (For main chat conversation)
   - **Caption**: `12px`, Line Height `1.5`, Weight `400` (For timestamps, small tips)
 - **Conversation Layout Specs**:
-  - Line height within chat bubbles remains `1.6`, paragraph spacing `8px`, ensuring comfortable reading of long texts.
+  - Line height within chat messages remains `1.6`, paragraph spacing `8px`, ensuring comfortable reading of long texts.
   - Quoted content uses a left vertical line + indent style, with lighter color.
 
 ## 3. Spacing System
@@ -48,8 +48,8 @@ Adopts a 4px/8px multiple grid system.
   - Bottom input area height: Adaptive, base height `60px`, max not exceeding `200px`.
 
 ## 4. Component Specs
-- **Chat Bubbles**:
-  - Border Radius: `12px` (Single-side convergence, e.g., top-left corner of left AI bubble set to `4px` to indicate conversation direction).
+- **Chat Bubbles (User Only)**:
+  - Border Radius: `12px` (Single-side convergence, e.g., top-right corner of user bubble set to `4px` to indicate conversation direction).
   - Shadow: Use no shadow or very light shadow `0 2px 8px rgba(0,0,0,0.04)` on light backgrounds.
 - **Input Area**:
   - Adopts Ant Design X `Sender` component style.
@@ -70,7 +70,7 @@ Adopts a 4px/8px multiple grid system.
 - **Dominant Mode**: Light Mode is primary, emphasizing the lightweight and refreshing feel of travel.
 - **Dark Mode Compatibility**:
   - Background: `#0F172A` (Slate-900)
-  - Card/Bubble Color: `#1E293B` (Slate-800)
+  - Card/User Bubble Color: `#1E293B` (Slate-800)
   - Main Text Color: `#F8FAFC` (Slate-50)
   - Border: `#334155` (Slate-700)
   - Images/Cards need 10% brightness reduction (filter processing) in dark mode.

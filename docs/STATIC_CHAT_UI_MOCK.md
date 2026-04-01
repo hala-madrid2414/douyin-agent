@@ -25,7 +25,7 @@
 - 提供“新对话”入口并触发回调
 
 消息列表：`src/routes/components/MessageList/`
-- 渲染消息气泡（区分 user / assistant 样式）
+- 渲染消息样式（user 为气泡，assistant 为无边框纯文本）
 - 消息变化时自动滚动到底部
 
 输入区：`src/routes/components/InputArea/`

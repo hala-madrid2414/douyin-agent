@@ -4,6 +4,7 @@
   gap: 14px;
   padding: 20px 24px 12px;
   width: 100%;
+  max-width: 800px;
 }
 
 .message-row {
@@ -19,16 +20,20 @@
 
 .message-row.assistant {
   justify-content: flex-start;
-}
-
-.assistant-avatar {
-  flex: 0 0 auto;
-  background: linear-gradient(135deg, #1677ff 0%, #69c0ff 100%);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 18px rgba(22, 119, 255, 0.18);
+  align-items: flex-start;
 }
 
 .message-bubble {
+  max-width: 100%;
+}
+
+.message-bubble.assistant {
+  padding-top: 3px;
+  padding-bottom: 4px;
+  width: 100%;
+}
+
+.message-bubble.user {
   max-width: min(680px, 78%);
   border-radius: 14px;
   padding: 10px 14px;
@@ -37,14 +42,6 @@
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.06),
     0 1px 0 rgba(255, 255, 255, 0.6) inset;
-}
-
-.message-bubble.assistant {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(22, 119, 255, 0.12);
-}
-
-.message-bubble.user {
   background: linear-gradient(135deg, rgba(22, 119, 255, 0.95), rgba(105, 192, 255, 0.9));
   border: 1px solid rgba(22, 119, 255, 0.25);
 }
