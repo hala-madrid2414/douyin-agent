@@ -1,3 +1,4 @@
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { MOCK_CHAT_SESSIONS, STATIC_AI_REPLY } from '@/constants/chat';
 import {
   CHAT_CACHE_SCHEMA_VERSION,
@@ -459,30 +460,38 @@ export const useChatStore = create<ChatStoreState>()(
         });
 
         try {
+          let aiReplyContent = '';
           // 2. 调用真实的 BFF 接口
-          const response = await fetch('/api/chat', {
+          await fetchEventSource('/api/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ conversationId, content }),
+            onmessage(event) {
+              if (event.event === 'message') {
+                try {
+                  const data = JSON.parse(event.data);
+                  if (data.content) {
+                    aiReplyContent += data.content;
+                    get().updateMessage(conversationId, assistantMessageId, {
+                      content: aiReplyContent,
+                    });
+                  }
+                } catch (e) {
+                  console.error('Failed to parse SSE message:', e);
+                }
+              } else if (event.event === 'done') {
+                get().updateMessage(conversationId, assistantMessageId, {
+                  status: 'complete',
+                });
+              }
+            },
+            onerror(error) {
+              console.error('SSE Error:', error);
+              throw error; // 抛出异常以阻止自动重试
+            },
           });
-          
-          const result = await response.json();
-          
-          if (response.ok && result.code === 200) {
-            // 3. 成功，更新 AI 回复
-            get().updateMessage(conversationId, assistantMessageId, {
-              content: result.data.content,
-              status: 'complete',
-            });
-          } else {
-            // 4. 业务错误
-            get().updateMessage(conversationId, assistantMessageId, {
-              content: result.message || '暂时无法为你规划行程，请稍后重试',
-              status: 'error',
-            });
-          }
         } catch (error) {
           // 5. 网络或其它异常
           console.error('Failed to send message:', error);

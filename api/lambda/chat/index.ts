@@ -1,50 +1,81 @@
-import OpenAI from 'openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatOpenAI } from '@langchain/openai';
 
 const SYSTEM_PROMPT = `你是一个专属旅行助手，专门为用户提供专业、贴心的旅行规划和建议。
 你可以帮助用户制定行程、推荐景点、解答关于目的地的各种问题。
 在回答时，请保持热情、专业，并尽可能提供具体、实用的信息。`;
 
-export const post = async ({ data }: { data: { conversationId: string; content: string } }) => {
+export const post = async ({
+  data,
+}: { data: { conversationId: string; content: string } }) => {
   const apiKey = process.env.DASHSCOPE_API_KEY || process.env.API_KEY || '';
-  const baseURL = process.env.LLM_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseURL =
+    process.env.LLM_BASE_URL ||
+    'https://dashscope.aliyuncs.com/compatible-mode/v1';
   const model = process.env.LLM_MODEL || 'qwen3-max';
-  
+
   if (!apiKey) {
-    return {
+    return new Response(JSON.stringify({
       code: 500,
       message: 'API key is missing. Please check your .env.local file.',
-      data: null
-    };
+      data: null,
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
-  const openai = new OpenAI({
-    apiKey: apiKey,
-    baseURL: baseURL,
+  const chat = new ChatOpenAI({
+    openAIApiKey: apiKey,
+    configuration: {
+      baseURL: baseURL,
+    },
+    modelName: model,
+    streaming: true,
   });
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: data.content },
-      ],
+    const messages = [
+      new SystemMessage(SYSTEM_PROMPT),
+      new HumanMessage(data.content),
+    ];
+
+    const stream = await chat.stream(messages);
+
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (chunk.content) {
+              const data = JSON.stringify({ content: chunk.content });
+              controller.enqueue(encoder.encode(`event: message\ndata: ${data}\n\n`));
+            }
+          }
+          controller.enqueue(encoder.encode(`event: done\ndata: {"messageId": "m_${Date.now()}"}\n\n`));
+          controller.close();
+        } catch (e) {
+          controller.error(e);
+        }
+      }
     });
 
-    return {
-      code: 200,
-      data: {
-        id: completion.id,
-        content: completion.choices[0].message.content,
-        timestamp: Date.now(),
-      }
-    };
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error('LLM API Error:', error);
-    return {
+    return new Response(JSON.stringify({
       code: 500,
       message: 'Failed to generate response from LLM',
-      data: null
-    };
+      data: null,
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 };
