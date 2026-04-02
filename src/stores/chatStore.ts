@@ -25,6 +25,8 @@ interface ChatUserBucket {
   seedSignature?: string;
 }
 
+const abortControllers = new Map<ConversationId, AbortController>();
+
 interface ChatStoreState {
   activeUserId: string;
   byUser: Record<string, ChatUserBucket>;
@@ -45,6 +47,7 @@ interface ChatStoreState {
     messageId: string,
     updates: Partial<ConversationMessage>,
   ) => void;
+  stopMessage: (conversationId: ConversationId) => void;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -442,8 +445,11 @@ export const useChatStore = create<ChatStoreState>()(
         conversationId: ConversationId,
         content: string,
       ) => {
+        // 1. 若当前会话已有进行中的请求，先中止它
+        get().stopMessage(conversationId);
+
         const userMessageId = createMessageId(conversationId, 'user');
-        // 1. 追加用户消息并设为 loading
+        // 2. 追加用户消息并设为 loading
         get().appendMessage(conversationId, {
           id: userMessageId,
           role: 'user',
@@ -459,14 +465,18 @@ export const useChatStore = create<ChatStoreState>()(
           status: 'loading',
         });
 
+        const controller = new AbortController();
+        abortControllers.set(conversationId, controller);
+
         try {
           let aiReplyContent = '';
-          // 2. 调用真实的 BFF 接口
+          // 3. 调用真实的 BFF 接口
           await fetchEventSource('/api/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
+            signal: controller.signal,
             body: JSON.stringify({ conversationId, content }),
             onmessage(event) {
               if (event.event === 'message') {
@@ -492,13 +502,20 @@ export const useChatStore = create<ChatStoreState>()(
               throw error; // 抛出异常以阻止自动重试
             },
           });
-        } catch (error) {
+        } catch (error: any) {
+          // 4. 判断是否为主动中止
+          if (error?.name === 'AbortError') {
+            console.log('Stream aborted for conversation:', conversationId);
+            return;
+          }
           // 5. 网络或其它异常
           console.error('Failed to send message:', error);
           get().updateMessage(conversationId, assistantMessageId, {
             content: '暂时无法为你规划行程，请稍后重试',
             status: 'error',
           });
+        } finally {
+          abortControllers.delete(conversationId);
         }
       },
       updateMessage: (
@@ -544,6 +561,52 @@ export const useChatStore = create<ChatStoreState>()(
                   },
                   order: bucket.order,
                 }),
+              },
+            },
+          };
+        });
+      },
+      stopMessage: (conversationId: ConversationId) => {
+        const controller = abortControllers.get(conversationId);
+        if (controller) {
+          controller.abort();
+          abortControllers.delete(conversationId);
+        }
+        
+        set(state => {
+          const userId = state.activeUserId;
+          const bucket = state.byUser[userId];
+          if (!bucket) return state;
+
+          const conversation = bucket.conversationsById[conversationId];
+          if (!conversation) return state;
+
+          let updated = false;
+          const nextMessages = conversation.messages.map(msg => {
+            if (msg.role === 'assistant' && msg.status === 'loading') {
+              updated = true;
+              return { ...msg, status: 'aborted' as const };
+            }
+            return msg;
+          });
+
+          if (!updated) return state;
+
+          const nextConversation = {
+            ...conversation,
+            messages: nextMessages,
+            updatedAt: nowIso(),
+          };
+
+          return {
+            byUser: {
+              ...state.byUser,
+              [userId]: {
+                ...bucket,
+                conversationsById: {
+                  ...bucket.conversationsById,
+                  [conversationId]: nextConversation,
+                },
               },
             },
           };

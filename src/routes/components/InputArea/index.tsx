@@ -6,6 +6,7 @@ import {
   BookOutlined,
   DownloadOutlined,
   PaperClipOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { Prompts, Sender } from '@ant-design/x';
 import { Button } from 'antd';
@@ -22,9 +23,11 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export interface InputAreaProps {
   onSend: (content: string) => void;
+  onStop?: () => void;
+  isGenerating?: boolean;
 }
 
-const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
+const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) => {
   const [value, setValue] = useState('');
 
   const handleSend = (message?: string) => {
@@ -48,6 +51,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
           onItemClick={info => {
             const prompt = QUICK_PROMPTS.find(p => p.id === info.data.key);
             if (prompt) {
+              if (isGenerating && onStop) {
+                onStop();
+              }
               setValue(prompt.text);
               handleSend(prompt.text);
             }
@@ -64,7 +70,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
           onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
-              handleSend();
+              if (!isGenerating) {
+                handleSend();
+              }
             }
           }}
           placeholder="提问或输入 / 使用技能"
@@ -82,15 +90,26 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend }) => {
                 icon={<AudioOutlined />}
                 className="sender-icon-btn"
               />
-              <Button
-                type="primary"
-                shape="circle"
-                icon={<ArrowUpOutlined />}
-                onClick={() => handleSend()}
-                disabled={!value.trim()}
-                className="sender-send-btn"
-                aria-label="发送"
-              />
+              {isGenerating ? (
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<StopOutlined />}
+                  onClick={() => onStop?.()}
+                  className="sender-stop-btn"
+                  aria-label="停止"
+                />
+              ) : (
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<ArrowUpOutlined />}
+                  onClick={() => handleSend()}
+                  disabled={!value.trim()}
+                  className="sender-send-btn"
+                  aria-label="发送"
+                />
+              )}
             </div>
           }
         />

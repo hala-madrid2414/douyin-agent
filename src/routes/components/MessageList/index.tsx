@@ -1,25 +1,61 @@
 import type { ConversationMessage } from '@/types/session';
+import { Think } from '@ant-design/x';
 import { XMarkdown } from '@ant-design/x-markdown';
-import { Typography } from 'antd';
+import { Button, Space, Typography, message as antMessage } from 'antd';
+import {
+  CheckCircleFilled,
+  CopyOutlined,
+  DislikeOutlined,
+  LikeOutlined,
+  MinusCircleFilled,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import './MessageList.less';
 
 export interface MessageListProps {
   messages: ConversationMessage[];
+  onRetry?: (content: string) => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   });
 
+  const handleFeedback = () => {
+    antMessage.success('收到反馈');
+  };
+
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      antMessage.success('复制成功');
+    });
+  };
+
+  const handleRetry = (currentIndex: number) => {
+    if (!onRetry) return;
+    // Look backwards from the current message index to find the last user message
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        onRetry(messages[i].content);
+        return;
+      }
+    }
+  };
+
   return (
     <div className="message-list" data-testid="message-list">
-      {messages.map(message => {
+      {messages.map((message, index) => {
         const isUser = message.role === 'user';
+        const isLoading = message.status === 'loading';
+        const isAborted = message.status === 'aborted';
+        const isComplete = message.status === 'complete';
+        const hasContent = Boolean(message.content);
+
         return (
           <div
             key={message.id}
@@ -31,7 +67,57 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
                   {message.content}
                 </Typography.Paragraph>
               ) : (
-                <XMarkdown children={message.content} />
+                <div className="assistant-message-content">
+                  {isLoading && !hasContent ? (
+                    <Think loading title="正在为你规划旅行…" />
+                  ) : (
+                    <Think loading={false} title="思考完毕" />
+                  )}
+                  {hasContent && (
+                    <XMarkdown children={message.content} />
+                  )}
+                  {(isComplete || isAborted) && (
+                    <div className="assistant-message-footer">
+                      <div className={`message-status ${isAborted ? 'aborted' : 'complete'}`}>
+                        {isComplete ? (
+                          <><CheckCircleFilled className="status-icon" /> 任务完成</>
+                        ) : (
+                          <><MinusCircleFilled className="status-icon" /> 已手动终止</>
+                        )}
+                      </div>
+                      <Space size={4} className="message-actions">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<LikeOutlined />}
+                          onClick={handleFeedback}
+                          title="赞"
+                        />
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<DislikeOutlined />}
+                          onClick={handleFeedback}
+                          title="踩"
+                        />
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => handleCopy(message.content)}
+                          title="复制"
+                        />
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<SyncOutlined />}
+                          onClick={() => handleRetry(index)}
+                          title="重试"
+                        />
+                      </Space>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

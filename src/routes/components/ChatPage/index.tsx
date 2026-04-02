@@ -82,6 +82,12 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
     );
   }, [activeBucket, normalizedConversationId]);
 
+  const isGenerating = useMemo(() => {
+    if (messages.length === 0) return false;
+    const lastMessage = messages[messages.length - 1];
+    return lastMessage.role === 'assistant' && lastMessage.status === 'loading';
+  }, [messages]);
+
   useEffect(() => {
     if (resolvedUserId !== activeUserId) {
       setActiveUser(resolvedUserId);
@@ -139,6 +145,12 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
     sendMessage(targetConversationId, content);
   };
 
+  const handleStop = () => {
+    if (normalizedConversationId) {
+      useChatStore.getState().stopMessage(normalizedConversationId);
+    }
+  };
+
   return (
     <div className="app-container">
       <Sidebar
@@ -156,11 +168,15 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
           {messages.length === 0 ? (
             <WelcomeView onPromptClick={handleSend} />
           ) : (
-            <MessageList messages={messages} />
+            <MessageList messages={messages} onRetry={handleSend} />
           )}
         </div>
         <div className="input-area-wrapper">
-          <InputArea onSend={handleSend} />
+          <InputArea
+            onSend={handleSend}
+            onStop={handleStop}
+            isGenerating={isGenerating}
+          />
         </div>
       </div>
     </div>

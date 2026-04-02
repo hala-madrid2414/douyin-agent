@@ -58,3 +58,51 @@
   color: rgba(255, 255, 255, 0.95);
 }
 
+.assistant-message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.message-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+
+  &.complete {
+    color: rgba(0, 0, 0, 0.65);
+    .status-icon {
+      color: #52c41a;
+      font-size: 14px;
+    }
+  }
+
+  &.aborted {
+    color: rgba(0, 0, 0, 0.45);
+    .status-icon {
+      color: #bfbfbf;
+      font-size: 14px;
+    }
+  }
+}
+
+.message-actions {
+  .ant-btn-text {
+    color: rgba(0, 0, 0, 0.45);
+    &:hover {
+      color: rgba(0, 0, 0, 0.85);
+      background-color: rgba(0, 0, 0, 0.04);
+    }
+  }
+}
+
