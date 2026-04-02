@@ -1,5 +1,5 @@
 import type { ConversationMessage } from '@/types/session';
-import { Think } from '@ant-design/x';
+import { Think, CodeHighlighter, Mermaid } from '@ant-design/x';
 import { XMarkdown } from '@ant-design/x-markdown';
 import { Button, Space, Typography, message as antMessage } from 'antd';
 import {
@@ -25,6 +25,22 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   });
+
+  const markdownComponents = {
+    code: (props: any) => {
+      const { lang, children, block } = props;
+      const codeContent = String(children);
+      
+      if (block) {
+        if (lang === 'mermaid') {
+          return <Mermaid>{codeContent}</Mermaid>;
+        }
+        return <CodeHighlighter lang={lang}>{codeContent}</CodeHighlighter>;
+      }
+      return <code className="inline-code">{children}</code>;
+    },
+    pre: (props: any) => <div className="markdown-pre-wrapper">{props.children}</div>,
+  };
 
   const handleFeedback = () => {
     antMessage.success('收到反馈');
@@ -55,6 +71,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
         const isAborted = message.status === 'aborted';
         const isComplete = message.status === 'complete';
         const hasContent = Boolean(message.content);
+        const hasThinking = Boolean(message.thinkingContent);
 
         return (
           <div
@@ -68,13 +85,22 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
                 </Typography.Paragraph>
               ) : (
                 <div className="assistant-message-content">
-                  {isLoading && !hasContent ? (
+                  {isLoading && !hasContent && !hasThinking ? (
                     <Think loading title="正在为你规划旅行…" />
-                  ) : (
-                    <Think loading={false} title="思考完毕" />
-                  )}
+                  ) : hasThinking ? (
+                    <Think
+                      loading={isLoading && !hasContent}
+                      title={isLoading && !hasContent ? '深入思考中…' : '思考完毕'}
+                      defaultExpanded={false}
+                    >
+                      <XMarkdown
+                        components={markdownComponents}
+                        children={message.thinkingContent}
+                      />
+                    </Think>
+                  ) : null}
                   {hasContent && (
-                    <XMarkdown children={message.content} />
+                    <XMarkdown components={markdownComponents} children={message.content} />
                   )}
                   {(isComplete || isAborted) && (
                     <div className="assistant-message-footer">

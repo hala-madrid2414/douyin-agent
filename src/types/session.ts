@@ -15,6 +15,7 @@ export interface ConversationMessage {
   id: string;
   role: ChatMessageRole;
   content: string;
+  thinkingContent?: string;
   createdAt: string;
   status?: ChatMessageStatus;
   model?: string;

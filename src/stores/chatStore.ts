@@ -470,6 +470,7 @@ export const useChatStore = create<ChatStoreState>()(
 
         try {
           let aiReplyContent = '';
+          let aiThinkingContent = '';
           // 3. 调用真实的 BFF 接口
           await fetchEventSource('/api/chat', {
             method: 'POST',
@@ -479,7 +480,19 @@ export const useChatStore = create<ChatStoreState>()(
             signal: controller.signal,
             body: JSON.stringify({ conversationId, content }),
             onmessage(event) {
-              if (event.event === 'message') {
+              if (event.event === 'thinking') {
+                try {
+                  const data = JSON.parse(event.data);
+                  if (data.content) {
+                    aiThinkingContent += data.content;
+                    get().updateMessage(conversationId, assistantMessageId, {
+                      thinkingContent: aiThinkingContent,
+                    });
+                  }
+                } catch (e) {
+                  console.error('Failed to parse SSE thinking message:', e);
+                }
+              } else if (event.event === 'message') {
                 try {
                   const data = JSON.parse(event.data);
                   if (data.content) {
