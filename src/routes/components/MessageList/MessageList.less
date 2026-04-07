@@ -64,11 +64,22 @@
   gap: 8px;
 }
 
-.think-empty {
-  display: inline-block;
+.loading-placeholder {
   color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
-  padding: 2px 6px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.dot-pulse::after {
+  content: '...';
+  animation: dot-pulse 1.5s infinite linear;
+}
+
+@keyframes dot-pulse {
+  0% { content: '.'; }
+  33% { content: '..'; }
+  66% { content: '...'; }
 }
 
 .assistant-message-footer {

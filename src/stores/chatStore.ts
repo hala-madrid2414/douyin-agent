@@ -41,6 +41,7 @@ interface ChatStoreState {
   sendMessage: (
     conversationId: ConversationId,
     content: string,
+    options?: { enableThinking?: boolean },
   ) => Promise<void>;
   updateMessage: (
     conversationId: ConversationId,
@@ -444,6 +445,7 @@ export const useChatStore = create<ChatStoreState>()(
       sendMessage: async (
         conversationId: ConversationId,
         content: string,
+        options?: { enableThinking?: boolean },
       ) => {
         // 1. 若当前会话已有进行中的请求，先中止它
         get().stopMessage(conversationId);
@@ -478,7 +480,7 @@ export const useChatStore = create<ChatStoreState>()(
               'Content-Type': 'application/json',
             },
             signal: controller.signal,
-            body: JSON.stringify({ conversationId, content }),
+            body: JSON.stringify({ conversationId, content, enableThinking: options?.enableThinking }),
             onmessage(event) {
               if (event.event === 'thinking') {
                 try {

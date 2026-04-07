@@ -7,7 +7,7 @@ const SYSTEM_PROMPT = `你是一个专属旅行助手，专门为用户提供专
 
 export const post = async ({
   data,
-}: { data: { conversationId: string; content: string } }) => {
+}: { data: { conversationId: string; content: string; enableThinking?: boolean } }) => {
   const apiKey = process.env.DASHSCOPE_API_KEY || process.env.API_KEY || '';
   const baseURL =
     process.env.LLM_BASE_URL ||
@@ -32,6 +32,12 @@ export const post = async ({
     },
     modelName: model,
     streaming: true,
+    ...(data.enableThinking ? {
+      modelKwargs: {
+        enable_thinking: true,
+        return_reasoning: true
+      }
+    } : {})
   });
 
   try {
@@ -46,63 +52,17 @@ export const post = async ({
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          let buffer = '';
-          let isThinking = false;
-          let thinkTagMatched = false;
-
           for await (const chunk of stream) {
-            // Support native reasoning_content if model provides it
+            // 捕获模型原生的深度思考内容
             if (chunk.additional_kwargs?.reasoning_content) {
               controller.enqueue(encoder.encode(`event: thinking\ndata: ${JSON.stringify({ content: chunk.additional_kwargs.reasoning_content })}\n\n`));
               continue;
             }
 
+            // 捕获正式回复内容
             if (chunk.content) {
-              buffer += chunk.content;
-              
-              if (!thinkTagMatched) {
-                if (buffer.includes('<think>')) {
-                  isThinking = true;
-                  thinkTagMatched = true;
-                  buffer = buffer.split('<think>')[1] || '';
-                } else if ('<think>'.startsWith(buffer)) {
-                  // Wait for more chunks to see if it's the start of a <think> tag
-                  continue;
-                } else {
-                  thinkTagMatched = true;
-                }
-              }
-
-              if (isThinking) {
-                if (buffer.includes('</think>')) {
-                  isThinking = false;
-                  const parts = buffer.split('</think>');
-                  if (parts[0]) {
-                    controller.enqueue(encoder.encode(`event: thinking\ndata: ${JSON.stringify({ content: parts[0] })}\n\n`));
-                  }
-                  buffer = parts[1] || '';
-                  if (buffer) {
-                    controller.enqueue(encoder.encode(`event: message\ndata: ${JSON.stringify({ content: buffer })}\n\n`));
-                    buffer = '';
-                  }
-                } else if (buffer.length > 10) {
-                  // Emit all but last 10 chars to be safe from splitting '</think>'
-                  const toEmit = buffer.slice(0, -10);
-                  buffer = buffer.slice(-10);
-                  controller.enqueue(encoder.encode(`event: thinking\ndata: ${JSON.stringify({ content: toEmit })}\n\n`));
-                }
-              } else {
-                if (buffer) {
-                  controller.enqueue(encoder.encode(`event: message\ndata: ${JSON.stringify({ content: buffer })}\n\n`));
-                  buffer = '';
-                }
-              }
+              controller.enqueue(encoder.encode(`event: message\ndata: ${JSON.stringify({ content: chunk.content })}\n\n`));
             }
-          }
-
-          if (buffer) {
-            const event = isThinking ? 'thinking' : 'message';
-            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify({ content: buffer })}\n\n`));
           }
 
           controller.enqueue(encoder.encode(`event: done\ndata: {"messageId": "m_${Date.now()}"}\n\n`));

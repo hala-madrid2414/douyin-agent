@@ -86,7 +86,9 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
               ) : (
                 <div className="assistant-message-content">
                   {isLoading && !hasContent && !hasThinking ? (
-                    <Think loading title="正在为你规划旅行…" />
+                    <div className="loading-placeholder">
+                      <span className="dot-pulse">正在为你规划旅行</span>
+                    </div>
                   ) : hasThinking ? (
                     <Think
                       loading={isLoading && !hasContent}

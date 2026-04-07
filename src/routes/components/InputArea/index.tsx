@@ -4,12 +4,13 @@ import {
   ArrowUpOutlined,
   AudioOutlined,
   BookOutlined,
+  BulbOutlined,
   DownloadOutlined,
   PaperClipOutlined,
   StopOutlined,
 } from '@ant-design/icons';
 import { Prompts, Sender } from '@ant-design/x';
-import { Button } from 'antd';
+import { Button, Space, Switch, Typography } from 'antd';
 import type React from 'react';
 import { useState } from 'react';
 import './InputArea.less';
@@ -22,18 +23,19 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export interface InputAreaProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, options?: { enableThinking?: boolean }) => void;
   onStop?: () => void;
   isGenerating?: boolean;
 }
 
 const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) => {
   const [value, setValue] = useState('');
+  const [enableThinking, setEnableThinking] = useState(false);
 
   const handleSend = (message?: string) => {
     const content = (typeof message === 'string' ? message : value).trim();
     if (!content) return;
-    onSend(content);
+    onSend(content, { enableThinking });
     setValue('');
   };
 
@@ -63,6 +65,22 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) =
       </div>
       <div className="sender-wrapper">
         <Sender
+          header={
+            <div className="sender-header">
+              <Space size="small">
+                <Switch
+                  size="small"
+                  checked={enableThinking}
+                  onChange={setEnableThinking}
+                  checkedChildren={<BulbOutlined />}
+                  unCheckedChildren={<BulbOutlined />}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  深度思考
+                </Typography.Text>
+              </Space>
+            </div>
+          }
           value={value}
           onChange={setValue}
           submitType="enter"
