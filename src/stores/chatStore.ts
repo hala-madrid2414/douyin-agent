@@ -482,6 +482,9 @@ export const useChatStore = create<ChatStoreState>()(
             signal: controller.signal,
             body: JSON.stringify({ conversationId, content, enableThinking: options?.enableThinking }),
             onmessage(event) {
+              if (controller.signal.aborted) {
+                return;
+              }
               if (event.event === 'thinking') {
                 try {
                   const data = JSON.parse(event.data);
@@ -546,9 +549,15 @@ export const useChatStore = create<ChatStoreState>()(
           const conversation = bucket.conversationsById[conversationId];
           if (!conversation) return state;
 
-          const nextMessages = conversation.messages.map(msg =>
-            msg.id === messageId ? { ...msg, ...updates } : msg
-          );
+          const nextMessages = conversation.messages.map(msg => {
+            if (msg.id === messageId) {
+              if (msg.status === 'aborted') {
+                return msg;
+              }
+              return { ...msg, ...updates };
+            }
+            return msg;
+          });
 
           const nextConversation = {
             ...conversation,

@@ -5,9 +5,8 @@ const SYSTEM_PROMPT = `你是一个专属旅行助手，专门为用户提供专
 你可以帮助用户制定行程、推荐景点、解答关于目的地的各种问题。
 在回答时，请保持热情、专业，并尽可能提供具体、实用的信息。`;
 
-export const post = async ({
-  data,
-}: { data: { conversationId: string; content: string; enableThinking?: boolean } }) => {
+export const post = async (request: Request) => {
+  const data = await request.json();
   const apiKey = process.env.DASHSCOPE_API_KEY || process.env.API_KEY || '';
   const baseURL =
     process.env.LLM_BASE_URL ||
@@ -46,7 +45,7 @@ export const post = async ({
       new HumanMessage(data.content),
     ];
 
-    const stream = await chat.stream(messages);
+    const stream = await chat.stream(messages, { signal: request.signal });
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
