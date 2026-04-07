@@ -92,7 +92,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
                   ) : hasThinking ? (
                     <Think
                       loading={isLoading && !hasContent}
-                      title={isLoading && !hasContent ? '深入思考中…' : '思考完毕'}
+                      title={isLoading && !hasContent ? '深度思考中…' : '思考完毕'}
                       defaultExpanded={false}
                     >
                       <XMarkdown

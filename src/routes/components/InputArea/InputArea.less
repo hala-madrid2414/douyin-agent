@@ -37,6 +37,28 @@
   justify-content: center;
 }
 
+.deep-think-btn {
+  &.active {
+    color: #1677ff;
+    border-color: #1677ff;
+    background-color: #e6f4ff;
+    
+    &:hover {
+      color: #0958d9;
+      border-color: #0958d9;
+      background-color: #bae0ff;
+    }
+  }
+
+  &.inactive {
+    color: #4e5969;
+    
+    &:hover {
+      color: #1d2129;
+    }
+  }
+}
+
 /* 覆盖 Sender 默认样式，使其更符合设计图 */
 :global {
   .ant-sender {

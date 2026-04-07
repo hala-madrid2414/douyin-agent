@@ -10,7 +10,7 @@ import {
   StopOutlined,
 } from '@ant-design/icons';
 import { Prompts, Sender } from '@ant-design/x';
-import { Button, Space, Switch, Typography } from 'antd';
+import { Button, Space } from 'antd';
 import type React from 'react';
 import { useState } from 'react';
 import './InputArea.less';
@@ -65,22 +65,6 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) =
       </div>
       <div className="sender-wrapper">
         <Sender
-          header={
-            <div className="sender-header">
-              <Space size="small">
-                <Switch
-                  size="small"
-                  checked={enableThinking}
-                  onChange={setEnableThinking}
-                  checkedChildren={<BulbOutlined />}
-                  unCheckedChildren={<BulbOutlined />}
-                />
-                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                  深度思考
-                </Typography.Text>
-              </Space>
-            </div>
-          }
           value={value}
           onChange={setValue}
           submitType="enter"
@@ -95,11 +79,22 @@ const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) =
           }}
           placeholder="提问或输入 / 使用技能"
           prefix={
-            <Button
-              type="text"
-              icon={<PaperClipOutlined />}
-              className="sender-icon-btn"
-            />
+            <Space size="small">
+              <Button
+                type="text"
+                icon={<PaperClipOutlined />}
+                className="sender-icon-btn"
+              />
+              <Button
+                size="small"
+                shape="round"
+                icon={<BulbOutlined />}
+                onClick={() => setEnableThinking(!enableThinking)}
+                className={`deep-think-btn ${enableThinking ? 'active' : 'inactive'}`}
+              >
+                深度思考: {enableThinking ? '开启' : '关闭'}
+              </Button>
+            </Space>
           }
           suffix={
             <div className="sender-actions">

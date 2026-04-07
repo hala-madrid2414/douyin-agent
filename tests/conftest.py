@@ -22,4 +22,7 @@ def pytest_runtest_makereport(item, call):
 
     os.makedirs("reports", exist_ok=True)
     screenshot_path = os.path.join("reports", f"{_safe_filename(item.name)}.png")
-    page.screenshot(path=screenshot_path, full_page=True)
+    try:
+        page.screenshot(path=screenshot_path, full_page=True)
+    except Exception as e:
+        print(f"Screenshot failed: {e}")
