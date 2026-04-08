@@ -11,11 +11,21 @@ export type ChatMessageStatus =
   | 'loading'
   | 'error';
 
+export type ToolCallStatus = 'loading' | 'success' | 'error' | 'abort';
+
+export interface ToolCallTrace {
+  key: string;
+  title: string;
+  description?: string;
+  status: ToolCallStatus;
+}
+
 export interface ConversationMessage {
   id: string;
   role: ChatMessageRole;
   content: string;
   thinkingContent?: string;
+  toolTrace?: ToolCallTrace[];
   createdAt: string;
   status?: ChatMessageStatus;
   model?: string;

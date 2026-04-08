@@ -23,12 +23,19 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export interface InputAreaProps {
-  onSend: (content: string, options?: { enableThinking?: boolean }) => void;
+  onSend: (
+    content: string,
+    options?: { enableThinking?: boolean; forceToolCall?: boolean },
+  ) => void;
   onStop?: () => void;
   isGenerating?: boolean;
 }
 
-const InputArea: React.FC<InputAreaProps> = ({ onSend, onStop, isGenerating }) => {
+const InputArea: React.FC<InputAreaProps> = ({
+  onSend,
+  onStop,
+  isGenerating,
+}) => {
   const [value, setValue] = useState('');
   const [enableThinking, setEnableThinking] = useState(false);
 

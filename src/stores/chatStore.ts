@@ -1,4 +1,3 @@
-import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { MOCK_CHAT_SESSIONS, STATIC_AI_REPLY } from '@/constants/chat';
 import {
   CHAT_CACHE_SCHEMA_VERSION,
@@ -9,8 +8,10 @@ import type {
   ConversationId,
   ConversationMessage,
   ConversationSummary,
+  ToolCallTrace,
 } from '@/types/session';
 import { createConversationId, isConversationId } from '@/utils/conversationId';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -41,7 +42,7 @@ interface ChatStoreState {
   sendMessage: (
     conversationId: ConversationId,
     content: string,
-    options?: { enableThinking?: boolean },
+    options?: { enableThinking?: boolean; forceToolCall?: boolean },
   ) => Promise<void>;
   updateMessage: (
     conversationId: ConversationId,
@@ -213,7 +214,9 @@ const sanitizeByUser = (rawByUser: unknown): Record<string, ChatUserBucket> => {
           ),
         );
         const extraConversations = Object.fromEntries(
-          Object.entries(conversationsById).filter(([id]) => !seededIds.has(id)),
+          Object.entries(conversationsById).filter(
+            ([id]) => !seededIds.has(id),
+          ),
         ) as Record<ConversationId, ConversationEntity>;
         const mergedConversationsById = {
           ...seededBucket.conversationsById,
@@ -445,7 +448,7 @@ export const useChatStore = create<ChatStoreState>()(
       sendMessage: async (
         conversationId: ConversationId,
         content: string,
-        options?: { enableThinking?: boolean },
+        options?: { enableThinking?: boolean; forceToolCall?: boolean },
       ) => {
         // 1. 若当前会话已有进行中的请求，先中止它
         get().stopMessage(conversationId);
@@ -458,13 +461,14 @@ export const useChatStore = create<ChatStoreState>()(
           content,
           status: 'complete',
         });
-        
+
         const assistantMessageId = createMessageId(conversationId, 'assistant');
         get().appendMessage(conversationId, {
           id: assistantMessageId,
           role: 'assistant',
           content: '',
           status: 'loading',
+          toolTrace: [],
         });
 
         const controller = new AbortController();
@@ -480,9 +484,17 @@ export const useChatStore = create<ChatStoreState>()(
               'Content-Type': 'application/json',
             },
             signal: controller.signal,
-            body: JSON.stringify({ conversationId, content, enableThinking: options?.enableThinking }),
+            body: JSON.stringify({
+              conversationId,
+              content,
+              enableThinking: options?.enableThinking,
+              forceToolCall: options?.forceToolCall,
+            }),
             async onopen(response) {
-              if (!response.ok && response.headers.get('content-type')?.includes('json')) {
+              if (
+                !response.ok &&
+                response.headers.get('content-type')?.includes('json')
+              ) {
                 const err = await response.json();
                 throw new Error(err.message || 'Server Error');
               }
@@ -515,6 +527,30 @@ export const useChatStore = create<ChatStoreState>()(
                 } catch (e) {
                   console.error('Failed to parse SSE message:', e);
                 }
+              } else if (event.event === 'tool_status') {
+                try {
+                  const data = JSON.parse(event.data);
+                  const nextStatusMap: Record<string, ToolCallTrace['status']> =
+                    {
+                      start: 'loading',
+                      success: 'success',
+                      error: 'error',
+                      abort: 'abort',
+                    };
+                  const status =
+                    nextStatusMap[String(data.status)] ?? 'loading';
+                  const nextTrace: ToolCallTrace = {
+                    key: String(data.tool || 'tavily'),
+                    title: String(data.title || '联网旅行信息查询'),
+                    description: data.detail ? String(data.detail) : undefined,
+                    status,
+                  };
+                  get().updateMessage(conversationId, assistantMessageId, {
+                    toolTrace: [nextTrace],
+                  });
+                } catch (e) {
+                  console.error('Failed to parse SSE tool_status event:', e);
+                }
               } else if (event.event === 'done') {
                 get().updateMessage(conversationId, assistantMessageId, {
                   status: 'complete',
@@ -526,9 +562,9 @@ export const useChatStore = create<ChatStoreState>()(
               throw error; // 抛出异常以阻止自动重试
             },
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           // 4. 判断是否为主动中止
-          if (error?.name === 'AbortError') {
+          if (error instanceof Error && error.name === 'AbortError') {
             console.log('Stream aborted for conversation:', conversationId);
             return;
           }
@@ -602,7 +638,7 @@ export const useChatStore = create<ChatStoreState>()(
           controller.abort();
           abortControllers.delete(conversationId);
         }
-        
+
         set(state => {
           const userId = state.activeUserId;
           const bucket = state.byUser[userId];

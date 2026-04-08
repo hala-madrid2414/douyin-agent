@@ -91,6 +91,13 @@
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
+.tool-thought-chain {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
 .message-status {
   display: flex;
   align-items: center;
@@ -109,6 +116,14 @@
     color: rgba(0, 0, 0, 0.45);
     .status-icon {
       color: #bfbfbf;
+      font-size: 14px;
+    }
+  }
+
+  &.error {
+    color: rgba(255, 77, 79, 0.9);
+    .status-icon {
+      color: #ff4d4f;
       font-size: 14px;
     }
   }

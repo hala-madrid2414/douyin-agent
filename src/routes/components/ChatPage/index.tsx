@@ -133,7 +133,10 @@ const ChatPage = ({ conversationIdFromRoute }: ChatPageProps) => {
     navigate(targetPath);
   };
 
-  const handleSend = (content: string, options?: { enableThinking?: boolean }) => {
+  const handleSend = (
+    content: string,
+    options?: { enableThinking?: boolean; forceToolCall?: boolean },
+  ) => {
     let targetConversationId = normalizedConversationId;
     if (!targetConversationId) {
       targetConversationId = createConversation();

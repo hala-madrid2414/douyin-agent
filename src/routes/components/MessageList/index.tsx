@@ -1,36 +1,49 @@
 import type { ConversationMessage } from '@/types/session';
-import { Think, CodeHighlighter, Mermaid } from '@ant-design/x';
-import { XMarkdown } from '@ant-design/x-markdown';
-import { Button, Space, Typography, message as antMessage } from 'antd';
 import {
   CheckCircleFilled,
+  ClockCircleOutlined,
   CopyOutlined,
   DislikeOutlined,
+  ExclamationCircleOutlined,
   LikeOutlined,
   MinusCircleFilled,
   SyncOutlined,
 } from '@ant-design/icons';
+import { CodeHighlighter, Mermaid, Think, ThoughtChain } from '@ant-design/x';
+import { XMarkdown } from '@ant-design/x-markdown';
+import { Button, Space, Typography, message as antMessage } from 'antd';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import './MessageList.less';
 
 export interface MessageListProps {
   messages: ConversationMessage[];
-  onRetry?: (content: string) => void;
+  onRetry?: (
+    content: string,
+    options?: { enableThinking?: boolean; forceToolCall?: boolean },
+  ) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement | null>(null);
+  type MarkdownCodeProps = {
+    lang?: string;
+    children?: React.ReactNode;
+    block?: boolean;
+  };
+  type MarkdownPreProps = {
+    children?: React.ReactNode;
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   });
 
   const markdownComponents = {
-    code: (props: any) => {
+    code: (props: MarkdownCodeProps) => {
       const { lang, children, block } = props;
       const codeContent = String(children);
-      
+
       if (block) {
         if (lang === 'mermaid') {
           return <Mermaid>{codeContent}</Mermaid>;
@@ -39,7 +52,9 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
       }
       return <code className="inline-code">{children}</code>;
     },
-    pre: (props: any) => <div className="markdown-pre-wrapper">{props.children}</div>,
+    pre: (props: MarkdownPreProps) => (
+      <div className="markdown-pre-wrapper">{props.children}</div>
+    ),
   };
 
   const handleFeedback = () => {
@@ -52,12 +67,15 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
     });
   };
 
-  const handleRetry = (currentIndex: number) => {
+  const handleRetry = (
+    currentIndex: number,
+    options?: { forceToolCall?: boolean },
+  ) => {
     if (!onRetry) return;
     // Look backwards from the current message index to find the last user message
     for (let i = currentIndex - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
-        onRetry(messages[i].content);
+        onRetry(messages[i].content, options);
         return;
       }
     }
@@ -70,8 +88,23 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
         const isLoading = message.status === 'loading';
         const isAborted = message.status === 'aborted';
         const isComplete = message.status === 'complete';
+        const isError = message.status === 'error';
         const hasContent = Boolean(message.content);
         const hasThinking = Boolean(message.thinkingContent);
+        const hasToolTrace = Boolean(message.toolTrace?.length);
+        const toolItems =
+          message.toolTrace?.map((trace, traceIndex) => ({
+            key: `${message.id}-${trace.key}-${traceIndex}`,
+            title: trace.title,
+            description: trace.description,
+            status: trace.status,
+            icon:
+              trace.status === 'loading' ? (
+                <ClockCircleOutlined />
+              ) : trace.status === 'error' ? (
+                <ExclamationCircleOutlined />
+              ) : undefined,
+          })) ?? [];
 
         return (
           <div
@@ -92,25 +125,46 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
                   ) : hasThinking ? (
                     <Think
                       loading={isLoading && !hasContent}
-                      title={isLoading && !hasContent ? '深度思考中…' : '思考完毕'}
+                      title={
+                        isLoading && !hasContent ? '深度思考中…' : '思考完毕'
+                      }
                       defaultExpanded={false}
                     >
-                      <XMarkdown
-                        components={markdownComponents}
-                        children={message.thinkingContent}
-                      />
+                      <XMarkdown components={markdownComponents}>
+                        {message.thinkingContent}
+                      </XMarkdown>
                     </Think>
                   ) : null}
                   {hasContent && (
-                    <XMarkdown components={markdownComponents} children={message.content} />
+                    <XMarkdown components={markdownComponents}>
+                      {message.content}
+                    </XMarkdown>
                   )}
-                  {(isComplete || isAborted) && (
+                  {hasToolTrace && (
+                    <div className="tool-thought-chain">
+                      <ThoughtChain items={toolItems} line="dashed" />
+                    </div>
+                  )}
+                  {(isComplete || isAborted || isError) && (
                     <div className="assistant-message-footer">
-                      <div className={`message-status ${isAborted ? 'aborted' : 'complete'}`}>
+                      <div
+                        className={`message-status ${isError ? 'error' : isAborted ? 'aborted' : 'complete'}`}
+                      >
                         {isComplete ? (
-                          <><CheckCircleFilled className="status-icon" /> 任务完成</>
+                          <>
+                            <CheckCircleFilled className="status-icon" />{' '}
+                            任务完成
+                          </>
+                        ) : isError ? (
+                          <>
+                            <ExclamationCircleOutlined className="status-icon" />{' '}
+                            生成失败
+                          </>
                         ) : (
-                          <><MinusCircleFilled className="status-icon" /> 已手动终止</>
+                          <>
+                            <MinusCircleFilled className="status-icon" />{' '}
+                            已手动终止
+                          </>
                         )}
                       </div>
                       <Space size={4} className="message-actions">
@@ -139,8 +193,11 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
                           type="text"
                           size="small"
                           icon={<SyncOutlined />}
-                          onClick={() => handleRetry(index)}
-                          title="重试"
+                          onClick={() =>
+                            handleRetry(index, { forceToolCall: true })
+                          }
+                          title={hasToolTrace ? '重查工具' : '重试'}
+                          style={{ display: hasToolTrace ? undefined : 'none' }}
                         />
                       </Space>
                     </div>
