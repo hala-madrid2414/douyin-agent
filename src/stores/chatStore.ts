@@ -481,6 +481,12 @@ export const useChatStore = create<ChatStoreState>()(
             },
             signal: controller.signal,
             body: JSON.stringify({ conversationId, content, enableThinking: options?.enableThinking }),
+            async onopen(response) {
+              if (!response.ok && response.headers.get('content-type')?.includes('json')) {
+                const err = await response.json();
+                throw new Error(err.message || 'Server Error');
+              }
+            },
             onmessage(event) {
               if (controller.signal.aborted) {
                 return;
