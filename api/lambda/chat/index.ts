@@ -163,31 +163,60 @@ export const post = async ({
 
   try {
     const encoder = new TextEncoder();
-    const emitSse = (
-      controller: ReadableStreamDefaultController<Uint8Array>,
-      event: string,
-      payload: Record<string, unknown>,
-    ) => {
-      controller.enqueue(
-        encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`),
-      );
-    };
-
-    const emitToolStatus = (
-      controller: ReadableStreamDefaultController<Uint8Array>,
-      status: ToolStatus,
-      detail?: string,
-    ) => {
-      emitSse(controller, 'tool_status', {
-        tool: 'tavily',
-        status,
-        title: '联网旅行信息查询',
-        detail: detail || '',
-      });
-    };
 
     const readableStream = new ReadableStream({
       async start(controller) {
+        let isClosed = false;
+        let isAborted = false;
+
+        const safeClose = () => {
+          if (isClosed) {
+            return;
+          }
+          try {
+            controller.close();
+          } catch {
+            // ignore close race
+          } finally {
+            isClosed = true;
+          }
+        };
+
+        const safeEmitSse = (
+          event: string,
+          payload: Record<string, unknown>,
+        ): boolean => {
+          if (isClosed) {
+            return false;
+          }
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`,
+              ),
+            );
+            return true;
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              (error as { code?: string }).code === 'ERR_INVALID_STATE'
+            ) {
+              isClosed = true;
+              return false;
+            }
+            throw error;
+          }
+        };
+
+        const emitToolStatus = (status: ToolStatus, detail?: string) => {
+          safeEmitSse('tool_status', {
+            tool: 'tavily',
+            status,
+            title: '联网旅行信息查询',
+            detail: detail || '',
+          });
+        };
+
         try {
           const query = String(data?.content || '');
           const forceToolCall = Boolean(data?.forceToolCall);
@@ -196,12 +225,11 @@ export const post = async ({
           let toolFailed = false;
 
           if (shouldCallTool) {
-            emitToolStatus(controller, 'start', '正在联网检索实时旅行信息');
+            emitToolStatus('start', '正在联网检索实时旅行信息');
             try {
               const results = await fetchTavilyWithRetry(query);
               toolContext = formatToolContext(results);
               emitToolStatus(
-                controller,
                 'success',
                 results.length > 0
                   ? `已检索到 ${results.length} 条候选信息`
@@ -210,11 +238,7 @@ export const post = async ({
             } catch (error) {
               toolFailed = true;
               console.error('Tavily tool failed:', maskSensitiveError(error));
-              emitToolStatus(
-                controller,
-                'error',
-                '工具调用失败，已切换为基础建议模式',
-              );
+              emitToolStatus('error', '工具调用失败，已切换为基础建议模式');
             }
           }
 
@@ -236,13 +260,14 @@ export const post = async ({
 
           for await (const chunk of stream) {
             if (request?.signal?.aborted) {
-              emitToolStatus(controller, 'abort', '请求已中止');
+              isAborted = true;
+              emitToolStatus('abort', '请求已中止');
               break;
             }
 
             // 捕获模型原生的深度思考内容
             if (chunk.additional_kwargs?.reasoning_content) {
-              emitSse(controller, 'thinking', {
+              safeEmitSse('thinking', {
                 content: chunk.additional_kwargs.reasoning_content,
               });
               continue;
@@ -250,19 +275,26 @@ export const post = async ({
 
             // 捕获正式回复内容
             if (chunk.content) {
-              emitSse(controller, 'message', { content: chunk.content });
+              safeEmitSse('message', { content: chunk.content });
             }
           }
 
-          emitSse(controller, 'done', { messageId: `m_${Date.now()}` });
-          controller.close();
+          if (!isAborted) {
+            safeEmitSse('done', { messageId: `m_${Date.now()}` });
+          }
+          safeClose();
         } catch (e) {
           console.error('Stream generation error:', e);
-          emitSse(controller, 'message', {
+          const abortedByError = e instanceof Error && e.name === 'AbortError';
+          if (abortedByError || isAborted) {
+            safeClose();
+            return;
+          }
+          safeEmitSse('message', {
             content: '暂时无法为你规划行程，请稍后重试',
           });
-          emitSse(controller, 'done', { messageId: `m_${Date.now()}` });
-          controller.close();
+          safeEmitSse('done', { messageId: `m_${Date.now()}` });
+          safeClose();
         }
       },
     });
