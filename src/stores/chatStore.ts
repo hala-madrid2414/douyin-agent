@@ -54,6 +54,18 @@ interface ChatStoreState {
 
 const nowIso = () => new Date().toISOString();
 
+const TOOL_TITLE_FALLBACK: Record<string, string> = {
+  qweather: '和风天气查询',
+  tavily: '联网旅行信息查询',
+};
+
+const TOOL_STATUS_MAP: Record<string, ToolCallTrace['status']> = {
+  start: 'loading',
+  success: 'success',
+  error: 'error',
+  abort: 'abort',
+};
+
 const MOCK_SESSION_SIGNATURE = JSON.stringify(
   MOCK_CHAT_SESSIONS.map(session => ({
     id: session.id,
@@ -530,23 +542,40 @@ export const useChatStore = create<ChatStoreState>()(
               } else if (event.event === 'tool_status') {
                 try {
                   const data = JSON.parse(event.data);
-                  const nextStatusMap: Record<string, ToolCallTrace['status']> =
-                    {
-                      start: 'loading',
-                      success: 'success',
-                      error: 'error',
-                      abort: 'abort',
-                    };
-                  const status =
-                    nextStatusMap[String(data.status)] ?? 'loading';
+                  const toolKey = String(data.tool || 'tavily').toLowerCase();
+                  const normalizedStatus = String(
+                    data.status || 'start',
+                  ).toLowerCase();
+                  const status = TOOL_STATUS_MAP[normalizedStatus] ?? 'loading';
                   const nextTrace: ToolCallTrace = {
-                    key: String(data.tool || 'tavily'),
-                    title: String(data.title || '联网旅行信息查询'),
+                    key: toolKey,
+                    title: String(
+                      data.title || TOOL_TITLE_FALLBACK[toolKey] || '工具调用',
+                    ),
                     description: data.detail ? String(data.detail) : undefined,
                     status,
                   };
+                  const state = get();
+                  const activeBucket = state.byUser[state.activeUserId];
+                  const activeConversation =
+                    activeBucket?.conversationsById[conversationId];
+                  const assistantMessage = activeConversation?.messages.find(
+                    msg => msg.id === assistantMessageId,
+                  );
+                  const previousTrace = assistantMessage?.toolTrace ?? [];
+                  const existedIndex = previousTrace.findIndex(
+                    trace => trace.key === nextTrace.key,
+                  );
+                  const mergedTrace =
+                    existedIndex >= 0
+                      ? previousTrace.map((trace, index) =>
+                          index === existedIndex
+                            ? { ...trace, ...nextTrace }
+                            : trace,
+                        )
+                      : [...previousTrace, nextTrace];
                   get().updateMessage(conversationId, assistantMessageId, {
-                    toolTrace: [nextTrace],
+                    toolTrace: mergedTrace,
                   });
                 } catch (e) {
                   console.error('Failed to parse SSE tool_status event:', e);
@@ -594,7 +623,23 @@ export const useChatStore = create<ChatStoreState>()(
           const nextMessages = conversation.messages.map(msg => {
             if (msg.id === messageId) {
               if (msg.status === 'aborted') {
-                return msg;
+                // Keep aborted message immutable for content/thinking,
+                // but allow toolTrace/status sync for terminal tool states.
+                if (
+                  typeof updates.status === 'undefined' &&
+                  typeof updates.toolTrace === 'undefined'
+                ) {
+                  return msg;
+                }
+                return {
+                  ...msg,
+                  ...(typeof updates.status !== 'undefined'
+                    ? { status: updates.status }
+                    : {}),
+                  ...(typeof updates.toolTrace !== 'undefined'
+                    ? { toolTrace: updates.toolTrace }
+                    : {}),
+                };
               }
               return { ...msg, ...updates };
             }

@@ -1,6 +1,58 @@
 import os
+from pathlib import Path
 
 from playwright.sync_api import Page, expect
+
+CHAT_LAMBDA_FILE = Path("api/lambda/chat/index.ts")
+
+
+def _read_chat_lambda() -> str:
+    return CHAT_LAMBDA_FILE.read_text(encoding="utf-8")
+
+
+def test_phase2_tavily_auth_and_request_contract():
+    """
+    [用例ID]: TC_PHASE2_TAVILY_001
+    [用例名称]: Tavily 鉴权与请求结构契约存在
+    [优先级]: High
+    [前置条件]: 代码可读
+    [测试步骤]:
+        1. 读取 chat lambda 源码
+        2. 校验 Tavily 请求使用 Authorization Bearer 鉴权
+        3. 校验 Tavily 请求体包含核心检索字段
+    [预期结果]:
+        - 存在 Authorization: Bearer 鉴权头
+        - 请求体包含 query / search_depth / max_results / topic
+    """
+    source = _read_chat_lambda()
+    assert "Authorization: `Bearer ${apiKey}`" in source
+    assert "query," in source
+    assert "search_depth: 'basic'" in source
+    assert "max_results: maxResults" in source
+    assert "topic: 'general'" in source
+
+
+def test_phase2_tavily_success_fusion_contract():
+    """
+    [用例ID]: TC_PHASE2_TAVILY_002
+    [用例名称]: Tavily 成功后进入回答融合契约存在
+    [优先级]: High
+    [前置条件]: 代码可读
+    [测试步骤]:
+        1. 读取 chat lambda 源码
+        2. 校验 Tavily success 状态上报与 toolContext 注入逻辑
+    [预期结果]:
+        - 存在 tavily success 状态上报
+        - 存在 toolContext 拼接进 finalSystemPrompt 的逻辑
+        - 存在“不暴露原始JSON”的融合指令
+    """
+    source = _read_chat_lambda()
+    assert "emitToolStatus(" in source
+    assert "'tavily'" in source
+    assert "'success'" in source
+    assert "if (toolContext) {" in source
+    assert "finalSystemPrompt += `\\n\\n以下是联网检索到的参考资料" in source
+    assert "不要暴露原始JSON" in source
 
 
 def test_phase2_tavily_toolchain(page: Page):
@@ -24,3 +76,9 @@ def test_phase2_tavily_toolchain(page: Page):
 
     # 完成后应该出现“重查工具”入口
     expect(page.get_by_title("重查工具").last).to_be_visible(timeout=60000)
+
+    # 回答融合校验：不应把原始 JSON 结构直接回显在回答里
+    assistant_msg = page.locator(".assistant-message-content").last
+    expect(assistant_msg).to_be_visible()
+    expect(assistant_msg).not_to_contain_text('"results":')
+    expect(assistant_msg).not_to_contain_text('{"title":')

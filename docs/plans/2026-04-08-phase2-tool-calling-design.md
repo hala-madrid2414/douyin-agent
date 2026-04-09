@@ -8,7 +8,7 @@
 
 ### 1. 工具调用能力
 - **智能判断**：识别需要实时信息的旅行问题
-- **多工具支持**：Tavily搜索、天气API、地图API等
+- **多工具支持**：Tavily搜索、和风天气API、地图API等
 - **结果融合**：将工具结果自然融入AI回答，而非直接展示原始数据
 
 ### 2. 用户体验优化
@@ -48,27 +48,27 @@ interface TavilySearchParams {
 }
 ```
 
-### 2. 天气API工具
+### 2. 和风天气API工具
 **功能定位**：获取目的地实时天气信息
 **典型场景**：
 - "青岛明天天气怎么样？"
 - "适合去杭州旅游的天气？"
 - "三亚未来一周天气预报"
 
-**API配置**（推荐OpenWeatherMap）：
+**API配置**（推荐和风天气 QWeather）：
 ```
 # .env.local
-OPENWEATHER_API_KEY=your_openweather_api_key_here
-OPENWEATHER_UNITS=metric
+QWEATHER_API_KEY=your_qweather_api_key_here
+QWEATHER_WEATHER_BASE_URL=https://devapi.qweather.com/v7
+QWEATHER_GEO_BASE_URL=https://geoapi.qweather.com/v2
 ```
 
 **调用参数**：
 ```typescript
 interface WeatherParams {
-  city: string;        // 城市名称
-  country?: string;    // 国家代码
-  days?: number;       // 预报天数（1-7）
-  include_hourly?: boolean;  // 是否包含小时预报
+  cityName: string;        // 城市名称（如“青岛”）
+  locationId?: string;     // 和风城市ID（可选，优先级高于cityName）
+  type?: 'now' | '3d' | '7d' | '24h'; // 实时/3天/7天/24小时
 }
 ```
 
@@ -115,7 +115,7 @@ interface InputAnalysis {
 **职责**：根据分析结果选择合适的工具
 **选择逻辑**：
 - **Tavily搜索**：需要景点信息、活动信息、实时状况
-- **天气API**：涉及天气、温度、降雨等问题
+- **和风天气API**：涉及天气、温度、降雨等问题
 - **地图API**：涉及地理位置、交通、路线规划
 
 #### 3. 工具执行节点（ToolExecutionNode）
@@ -213,7 +213,7 @@ POST /api/tools/test         // 测试工具连接
 ```bash
 # .env.local（用户本地配置）
 TAVILY_API_KEY=tvly-your-key-here
-OPENWEATHER_API_KEY=your-weather-key-here
+QWEATHER_API_KEY=your-qweather-key-here
 GAODE_MAP_API_KEY=your-gaode-key-here
 
 # 可选：工具调用配置
@@ -272,7 +272,7 @@ const staticTestCases = [
 
 ### 阶段2.1：工具封装（2-3天）
 1. Tavily搜索工具封装
-2. 天气API工具封装
+2. 和风天气API工具封装
 3. 地图API工具封装
 4. 统一工具接口设计
 

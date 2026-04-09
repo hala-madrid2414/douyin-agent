@@ -81,6 +81,17 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
     }
   };
 
+  const getFallbackToolDescription = (
+    key: string,
+    status: 'loading' | 'success' | 'error' | 'abort',
+  ): string => {
+    const toolName = key.toLowerCase() === 'qweather' ? '天气工具' : '联网工具';
+    if (status === 'loading') return `${toolName}执行中`;
+    if (status === 'success') return `${toolName}执行成功`;
+    if (status === 'error') return `${toolName}执行失败，已降级`;
+    return `${toolName}已中止`;
+  };
+
   return (
     <div className="message-list" data-testid="message-list">
       {messages.map((message, index) => {
@@ -96,7 +107,9 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
           message.toolTrace?.map((trace, traceIndex) => ({
             key: `${message.id}-${trace.key}-${traceIndex}`,
             title: trace.title,
-            description: trace.description,
+            description:
+              trace.description ||
+              getFallbackToolDescription(trace.key, trace.status),
             status: trace.status,
             icon:
               trace.status === 'loading' ? (
