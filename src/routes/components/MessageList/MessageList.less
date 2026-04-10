@@ -93,12 +93,113 @@
 
 .tool-thought-chain {
   margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.02);
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
 }
 
-.message-status {
+.thought-chain-panel {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px 8px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.024), rgba(0, 0, 0, 0.012));
+}
+
+.thought-chain-root {
+  width: 100%;
+}
+
+.thought-chain-item {
+  --thought-chain-status-color: rgba(0, 0, 0, 0.45);
+  margin-bottom: 2px;
+}
+
+.thought-chain-item-icon {
+  color: var(--thought-chain-status-color);
+  opacity: 0.95;
+}
+
+.thought-chain-item-header {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.82);
+  gap: 6px;
+  line-height: 1.45;
+}
+
+.thought-chain-item-content {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  line-height: 1.6;
+  padding-top: 2px;
+}
+
+.thought-chain-node-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.thought-chain-node-type {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.thought-chain-node-main-title {
+  color: rgba(0, 0, 0, 0.86);
+}
+
+.thought-chain-node-description {
+  color: rgba(0, 0, 0, 0.56);
+}
+
+.thought-chain-node-loading {
+  --thought-chain-status-color: #1677ff;
+  .thought-chain-item-header {
+    color: #1677ff;
+  }
+  animation: thought-chain-node-blink 1.2s ease-in-out infinite;
+}
+
+.thought-chain-node-success {
+  --thought-chain-status-color: #389e0d;
+  .thought-chain-item-header {
+    color: #389e0d;
+  }
+}
+
+.thought-chain-node-error {
+  --thought-chain-status-color: #cf1322;
+  .thought-chain-item-header {
+    color: #cf1322;
+  }
+}
+
+.thought-chain-node-abort {
+  --thought-chain-status-color: rgba(0, 0, 0, 0.45);
+  .thought-chain-item-header {
+    color: rgba(0, 0, 0, 0.45);
+  }
+}
+
+@keyframes thought-chain-node-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.assistant-message-footer .message-status {
   display: flex;
   align-items: center;
   gap: 6px;

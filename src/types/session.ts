@@ -13,6 +13,19 @@ export type ChatMessageStatus =
 
 export type ToolCallStatus = 'loading' | 'success' | 'error' | 'abort';
 
+export type ThoughtChainNodeType = 'planning' | 'tool';
+
+export interface ThoughtChainNode {
+  key: string;
+  type: ThoughtChainNodeType;
+  order: number;
+  title: string;
+  description?: string;
+  status: ToolCallStatus;
+  planId?: string;
+  toolCallId?: string;
+}
+
 export interface ToolCallTrace {
   key: string;
   title: string;
@@ -25,6 +38,7 @@ export interface ConversationMessage {
   role: ChatMessageRole;
   content: string;
   thinkingContent?: string;
+  thoughtChain?: ThoughtChainNode[];
   toolTrace?: ToolCallTrace[];
   createdAt: string;
   status?: ChatMessageStatus;

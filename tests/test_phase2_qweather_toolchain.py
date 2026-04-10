@@ -2,10 +2,19 @@ from pathlib import Path
 
 
 CHAT_LAMBDA_FILE = Path("api/lambda/chat/index.ts")
+LANGGRAPH_RUNTIME_FILE = Path("api/lambda/chat/langgraph/runtime.ts")
 
 
 def _read_chat_lambda() -> str:
     return CHAT_LAMBDA_FILE.read_text(encoding="utf-8")
+
+
+def _read_runtime() -> str:
+    return LANGGRAPH_RUNTIME_FILE.read_text(encoding="utf-8")
+
+
+def _read_orchestration_source() -> str:
+    return f"{_read_chat_lambda()}\n{_read_runtime()}"
 
 
 def test_phase2_qweather_trigger_contract():
@@ -21,11 +30,11 @@ def test_phase2_qweather_trigger_contract():
         - 存在 WEATHER_HINT_PATTERNS 与 shouldUseWeatherTool
         - 存在 hasWeatherIntent 分支和 qweather start 状态上报
     """
-    source = _read_chat_lambda()
+    source = _read_orchestration_source()
     assert "const WEATHER_HINT_PATTERNS" in source
     assert "const shouldUseWeatherTool" in source
     assert "const hasWeatherIntent = shouldUseWeatherTool(query);" in source
-    assert "if (hasWeatherIntent) {" in source
+    assert "selectedTools.push('qweather');" in source
     assert "emitToolStatus('qweather', 'start'" in source
 
 
@@ -44,12 +53,12 @@ def test_phase2_qweather_degrade_contract():
         - 存在 hasWeatherIntent && weatherFailed 的补偿触发逻辑
         - 存在“暂时无法获取完整实时信息，为你提供基础建议”降级提示
     """
-    source = _read_chat_lambda()
+    source = _read_orchestration_source()
     assert "emitToolStatus(" in source
     assert "'qweather'" in source
     assert "'error'" in source
     assert "天气工具调用失败，已切换为基础建议模式" in source
-    assert "(hasWeatherIntent && weatherFailed)" in source
+    assert "Promise.allSettled(toolRuns)" in source
     assert "暂时无法获取完整实时信息，为你提供基础建议" in source
 
 

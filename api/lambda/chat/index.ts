@@ -1,5 +1,12 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
+import {
+  type SseEventName,
+  type SsePayloadByEvent,
+  type ToolStatus,
+  formatSse,
+} from '../../../src/server/chat/langgraph/contract.ts';
+import { runChatLangGraphRuntime } from '../../../src/server/chat/langgraph/runtime.ts';
 
 const SYSTEM_PROMPT = `你是一个专属旅行助手，专门为用户提供专业、贴心的旅行规划和建议。
 你可以帮助用户制定行程、推荐景点、解答关于目的地的各种问题。
@@ -12,7 +19,6 @@ type TavilySearchResult = {
   score?: number;
 };
 
-type ToolStatus = 'start' | 'success' | 'error' | 'abort';
 type WeatherType = 'now' | '3d' | '7d' | '24h';
 
 interface ChatRequestData {
@@ -731,7 +737,6 @@ export const post = async ({
     const readableStream = new ReadableStream({
       async start(controller) {
         let isClosed = false;
-        let isAborted = false;
 
         const safeClose = () => {
           if (isClosed) {
@@ -746,19 +751,15 @@ export const post = async ({
           }
         };
 
-        const safeEmitSse = (
-          event: string,
-          payload: Record<string, unknown>,
+        const emitSse = <E extends SseEventName>(
+          event: E,
+          payload: SsePayloadByEvent[E],
         ): boolean => {
           if (isClosed) {
             return false;
           }
           try {
-            controller.enqueue(
-              encoder.encode(
-                `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`,
-              ),
-            );
+            controller.enqueue(encoder.encode(formatSse(event, payload)));
             return true;
           } catch (error) {
             if (
@@ -777,7 +778,7 @@ export const post = async ({
           status: ToolStatus,
           detail?: string,
         ) => {
-          safeEmitSse('tool_status', {
+          emitSse('tool_status', {
             tool,
             status,
             title: tool === 'qweather' ? '和风天气查询' : '联网旅行信息查询',
@@ -788,127 +789,46 @@ export const post = async ({
         try {
           const query = String(data?.content || '');
           const forceToolCall = Boolean(data?.forceToolCall);
-          const hasWeatherIntent = shouldUseWeatherTool(query);
-          const hasRealtimeIntent = shouldUseRealtimeTool(query);
-          const hasNonWeatherRealtimeIntent =
-            shouldUseNonWeatherRealtimeTool(query);
-          let toolContext = '';
-          let weatherContext = '';
-          let toolFailed = false;
-          let weatherFailed = false;
-
-          if (hasWeatherIntent) {
-            emitToolStatus('qweather', 'start', '正在查询目的地天气信息');
-            try {
-              weatherContext = await fetchQWeatherContext(query);
-              emitToolStatus(
-                'qweather',
-                'success',
-                '已完成 now/24h/3d/7d 天气整合',
-              );
-            } catch (error) {
-              weatherFailed = true;
-              console.error('QWeather tool failed:', maskSensitiveError(error));
-              emitToolStatus(
-                'qweather',
-                'error',
-                '天气工具调用失败，已切换为基础建议模式',
-              );
-            }
-          }
-
-          const shouldCallRealtimeTool =
-            forceToolCall ||
-            hasNonWeatherRealtimeIntent ||
-            (!hasWeatherIntent && hasRealtimeIntent) ||
-            (hasWeatherIntent && weatherFailed);
-
-          if (shouldCallRealtimeTool) {
-            const tavilyReason = hasWeatherIntent
-              ? weatherFailed
-                ? '天气查询失败，正在联网补充天气信息'
-                : '正在联网检索景点开放等实时信息'
-              : '正在联网检索实时旅行信息';
-            emitToolStatus('tavily', 'start', tavilyReason);
-            try {
-              const results = await fetchTavilyWithRetry(query);
-              toolContext = formatToolContext(results);
-              emitToolStatus(
-                'tavily',
-                'success',
-                results.length > 0
-                  ? `已检索到 ${results.length} 条候选信息`
-                  : '未检索到高置信结果',
-              );
-            } catch (error) {
-              toolFailed = true;
-              console.error('Tavily tool failed:', maskSensitiveError(error));
-              emitToolStatus(
-                'tavily',
-                'error',
-                hasWeatherIntent
-                  ? '联网补充失败，已切换为基础建议模式'
-                  : '工具调用失败，已切换为基础建议模式',
-              );
-            }
-          }
-
-          let finalSystemPrompt = SYSTEM_PROMPT;
-          if (weatherContext) {
-            finalSystemPrompt += `\n\n以下是和风天气返回的标准化上下文，请优先使用与用户问题最相关的数据点，避免虚构。\n${weatherContext}`;
-          }
-          if (toolContext) {
-            finalSystemPrompt += `\n\n以下是联网检索到的参考资料，请仅提取与用户问题相关且可信的信息，不要暴露原始JSON。\n${toolContext}`;
-          }
-          if (toolFailed || weatherFailed) {
-            finalSystemPrompt +=
-              '\n\n部分联网工具暂不可用，请在回答开头说明“暂时无法获取完整实时信息，为你提供基础建议”，然后继续给出有用建议。';
-          }
-
-          const messages = [
-            new SystemMessage(finalSystemPrompt),
-            new HumanMessage(query),
-          ];
-
-          const stream = await chat.stream(messages);
-
-          for await (const chunk of stream) {
-            if (request?.signal?.aborted) {
-              isAborted = true;
-              emitToolStatus('tavily', 'abort', '请求已中止');
-              emitToolStatus('qweather', 'abort', '请求已中止');
-              break;
-            }
-
-            // 捕获模型原生的深度思考内容
-            if (chunk.additional_kwargs?.reasoning_content) {
-              safeEmitSse('thinking', {
-                content: chunk.additional_kwargs.reasoning_content,
-              });
-              continue;
-            }
-
-            // 捕获正式回复内容
-            if (chunk.content) {
-              safeEmitSse('message', { content: chunk.content });
-            }
-          }
-
-          if (!isAborted) {
-            safeEmitSse('done', { messageId: `m_${Date.now()}` });
-          }
+          const runQWeatherNode = async (query: string) => {
+            return fetchQWeatherContext(query);
+          };
+          const runTavilyNode = async (query: string) => {
+            const rows = await fetchTavilyWithRetry(query);
+            return formatToolContext(rows);
+          };
+          await runChatLangGraphRuntime({
+            query,
+            forceToolCall,
+            systemPrompt: SYSTEM_PROMPT,
+            requestSignal: request?.signal,
+            shouldUseWeatherTool,
+            shouldUseRealtimeTool,
+            shouldUseNonWeatherRealtimeTool,
+            runQWeatherNode,
+            runTavilyNode,
+            maskSensitiveError,
+            streamModel: async (q, finalSystemPrompt) => {
+              const messages = [
+                new SystemMessage(finalSystemPrompt),
+                new HumanMessage(q),
+              ];
+              return chat.stream(messages);
+            },
+            emitSse,
+            emitToolStatus,
+          });
           safeClose();
         } catch (e) {
           console.error('Stream generation error:', e);
           const abortedByError = e instanceof Error && e.name === 'AbortError';
-          if (abortedByError || isAborted) {
+          if (abortedByError || request?.signal?.aborted) {
             safeClose();
             return;
           }
-          safeEmitSse('message', {
-            content: '暂时无法为你规划行程，请稍后重试',
+          emitSse('error', {
+            code: 'stream_generation_failed',
+            message: '暂时无法为你规划行程，请稍后重试',
           });
-          safeEmitSse('done', { messageId: `m_${Date.now()}` });
           safeClose();
         }
       },

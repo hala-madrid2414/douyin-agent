@@ -8,6 +8,7 @@ import type {
   ConversationId,
   ConversationMessage,
   ConversationSummary,
+  ThoughtChainNode,
   ToolCallTrace,
 } from '@/types/session';
 import { createConversationId, isConversationId } from '@/utils/conversationId';
@@ -64,6 +65,86 @@ const TOOL_STATUS_MAP: Record<string, ToolCallTrace['status']> = {
   success: 'success',
   error: 'error',
   abort: 'abort',
+};
+
+const PLANNING_STATUS_MAP: Record<string, ThoughtChainNode['status']> = {
+  pending: 'loading',
+  running: 'loading',
+  success: 'success',
+  error: 'error',
+  abort: 'abort',
+};
+
+const TOOL_DESCRIPTION_FALLBACK: Record<string, string> = {
+  qweather: '天气工具执行中',
+  tavily: '联网工具执行中',
+};
+
+type PlanningStepPayload = {
+  key: string;
+  title: string;
+  description?: string;
+  status?: string;
+};
+
+const sortThoughtChainByOrder = (
+  chain: ThoughtChainNode[],
+): ThoughtChainNode[] => [...chain].sort((left, right) => left.order - right.order);
+
+const upsertThoughtChainNode = (
+  chain: ThoughtChainNode[],
+  nextNode: ThoughtChainNode,
+): ThoughtChainNode[] => {
+  const existedIndex = chain.findIndex(node => node.key === nextNode.key);
+  if (existedIndex < 0) {
+    return sortThoughtChainByOrder([...chain, nextNode]);
+  }
+  const mergedChain = chain.map((node, index) =>
+    index === existedIndex
+      ? {
+          ...node,
+          ...nextNode,
+          order: node.order,
+        }
+      : node,
+  );
+  return sortThoughtChainByOrder(mergedChain);
+};
+
+const getNextThoughtChainOrder = (
+  chain: ThoughtChainNode[],
+  fallback = 0,
+): number => {
+  if (chain.length === 0) {
+    return fallback;
+  }
+  return (
+    chain.reduce((maxOrder, node) => Math.max(maxOrder, node.order), fallback) +
+    1
+  );
+};
+
+const mergePlanningThoughtChain = (
+  previousChain: ThoughtChainNode[],
+  planId: string,
+  steps: PlanningStepPayload[],
+): ThoughtChainNode[] => {
+  const planningNodes: ThoughtChainNode[] = steps.map((step, index) => ({
+    key: `planning:${planId}:${step.key}:${index}`,
+    type: 'planning',
+    order: index,
+    planId,
+    title: String(step.title || '执行步骤'),
+    description: step.description ? String(step.description) : undefined,
+    status: PLANNING_STATUS_MAP[String(step.status || 'pending')] ?? 'loading',
+  }));
+  const nonPlanningNodes = sortThoughtChainByOrder(
+    previousChain.filter(node => node.type !== 'planning'),
+  ).map((node, index) => ({
+    ...node,
+    order: planningNodes.length + index,
+  }));
+  return sortThoughtChainByOrder([...planningNodes, ...nonPlanningNodes]);
 };
 
 const MOCK_SESSION_SIGNATURE = JSON.stringify(
@@ -480,6 +561,7 @@ export const useChatStore = create<ChatStoreState>()(
           role: 'assistant',
           content: '',
           status: 'loading',
+          thoughtChain: [],
           toolTrace: [],
         });
 
@@ -539,16 +621,58 @@ export const useChatStore = create<ChatStoreState>()(
                 } catch (e) {
                   console.error('Failed to parse SSE message:', e);
                 }
+              } else if (event.event === 'planning') {
+                try {
+                  const data = JSON.parse(event.data) as {
+                    planId?: string;
+                    steps?: PlanningStepPayload[];
+                  };
+                  if (!data.planId || !Array.isArray(data.steps)) {
+                    return;
+                  }
+                  const state = get();
+                  const activeBucket = state.byUser[state.activeUserId];
+                  const activeConversation =
+                    activeBucket?.conversationsById[conversationId];
+                  const assistantMessage = activeConversation?.messages.find(
+                    msg => msg.id === assistantMessageId,
+                  );
+                  const previousThoughtChain =
+                    assistantMessage?.thoughtChain ?? [];
+                  const mergedThoughtChain = mergePlanningThoughtChain(
+                    previousThoughtChain,
+                    String(data.planId),
+                    data.steps,
+                  );
+                  get().updateMessage(conversationId, assistantMessageId, {
+                    thoughtChain: mergedThoughtChain,
+                  });
+                } catch (e) {
+                  console.error('Failed to parse SSE planning event:', e);
+                }
               } else if (event.event === 'tool_status') {
                 try {
-                  const data = JSON.parse(event.data);
+                  const data = JSON.parse(event.data) as {
+                    tool?: string;
+                    status?: string;
+                    title?: string;
+                    detail?: string;
+                    toolCallId?: string;
+                    callId?: string;
+                    key?: string;
+                  };
                   const toolKey = String(data.tool || 'tavily').toLowerCase();
                   const normalizedStatus = String(
                     data.status || 'start',
                   ).toLowerCase();
+                  const toolCallId =
+                    data.toolCallId || data.callId || data.key || '';
+                  const traceKey = toolCallId
+                    ? `${toolKey}:${toolCallId}`
+                    : toolKey;
                   const status = TOOL_STATUS_MAP[normalizedStatus] ?? 'loading';
                   const nextTrace: ToolCallTrace = {
-                    key: toolKey,
+                    key: traceKey,
                     title: String(
                       data.title || TOOL_TITLE_FALLBACK[toolKey] || '工具调用',
                     ),
@@ -563,6 +687,32 @@ export const useChatStore = create<ChatStoreState>()(
                     msg => msg.id === assistantMessageId,
                   );
                   const previousTrace = assistantMessage?.toolTrace ?? [];
+                  const previousThoughtChain =
+                    assistantMessage?.thoughtChain ?? [];
+                  const existedThoughtNode = previousThoughtChain.find(
+                    node => node.key === traceKey,
+                  );
+                  const nextNodeOrder =
+                    existedThoughtNode?.order ??
+                    getNextThoughtChainOrder(
+                      previousThoughtChain,
+                      previousThoughtChain.filter(
+                        node => node.type === 'planning',
+                      ).length,
+                    );
+                  const nextThoughtNode: ThoughtChainNode = {
+                    key: traceKey,
+                    type: 'tool',
+                    order: nextNodeOrder,
+                    title: String(
+                      data.title || TOOL_TITLE_FALLBACK[toolKey] || '工具调用',
+                    ),
+                    description: data.detail
+                      ? String(data.detail)
+                      : TOOL_DESCRIPTION_FALLBACK[toolKey],
+                    status,
+                    toolCallId: toolCallId || undefined,
+                  };
                   const existedIndex = previousTrace.findIndex(
                     trace => trace.key === nextTrace.key,
                   );
@@ -574,11 +724,70 @@ export const useChatStore = create<ChatStoreState>()(
                             : trace,
                         )
                       : [...previousTrace, nextTrace];
+                  const mergedThoughtChain = upsertThoughtChainNode(
+                    previousThoughtChain,
+                    nextThoughtNode,
+                  );
                   get().updateMessage(conversationId, assistantMessageId, {
                     toolTrace: mergedTrace,
+                    thoughtChain: mergedThoughtChain,
                   });
                 } catch (e) {
                   console.error('Failed to parse SSE tool_status event:', e);
+                }
+              } else if (event.event === 'abort') {
+                const state = get();
+                const activeBucket = state.byUser[state.activeUserId];
+                const activeConversation =
+                  activeBucket?.conversationsById[conversationId];
+                const assistantMessage = activeConversation?.messages.find(
+                  msg => msg.id === assistantMessageId,
+                );
+                const mergedThoughtChain =
+                  assistantMessage?.thoughtChain?.map(node =>
+                    node.status === 'loading'
+                      ? { ...node, status: 'abort' as const }
+                      : node,
+                  ) ?? [];
+                get().updateMessage(conversationId, assistantMessageId, {
+                  thoughtChain: mergedThoughtChain,
+                  status: 'aborted',
+                });
+              } else if (event.event === 'error') {
+                try {
+                  const data = JSON.parse(event.data) as {
+                    code?: string;
+                    message?: string;
+                  };
+                  const state = get();
+                  const activeBucket = state.byUser[state.activeUserId];
+                  const activeConversation =
+                    activeBucket?.conversationsById[conversationId];
+                  const assistantMessage = activeConversation?.messages.find(
+                    msg => msg.id === assistantMessageId,
+                  );
+                  const mergedThoughtChain =
+                    assistantMessage?.thoughtChain?.map(node =>
+                      node.status === 'loading'
+                        ? { ...node, status: 'error' as const }
+                        : node,
+                    ) ?? [];
+                  const mergedTrace =
+                    assistantMessage?.toolTrace?.map(trace =>
+                      trace.status === 'loading'
+                        ? { ...trace, status: 'error' as const }
+                        : trace,
+                    ) ?? [];
+                  get().updateMessage(conversationId, assistantMessageId, {
+                    content:
+                      assistantMessage?.content ||
+                      String(data.message || '暂时无法为你规划行程，请稍后重试'),
+                    thoughtChain: mergedThoughtChain,
+                    toolTrace: mergedTrace,
+                    status: 'error',
+                  });
+                } catch (e) {
+                  console.error('Failed to parse SSE error event:', e);
                 }
               } else if (event.event === 'done') {
                 get().updateMessage(conversationId, assistantMessageId, {
@@ -627,7 +836,8 @@ export const useChatStore = create<ChatStoreState>()(
                 // but allow toolTrace/status sync for terminal tool states.
                 if (
                   typeof updates.status === 'undefined' &&
-                  typeof updates.toolTrace === 'undefined'
+                  typeof updates.toolTrace === 'undefined' &&
+                  typeof updates.thoughtChain === 'undefined'
                 ) {
                   return msg;
                 }
@@ -638,6 +848,9 @@ export const useChatStore = create<ChatStoreState>()(
                     : {}),
                   ...(typeof updates.toolTrace !== 'undefined'
                     ? { toolTrace: updates.toolTrace }
+                    : {}),
+                  ...(typeof updates.thoughtChain !== 'undefined'
+                    ? { thoughtChain: updates.thoughtChain }
                     : {}),
                 };
               }

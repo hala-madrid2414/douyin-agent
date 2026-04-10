@@ -92,6 +92,24 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
     return `${toolName}已中止`;
   };
 
+  const getFallbackThoughtDescription = (
+    nodeType: 'planning' | 'tool',
+    key: string,
+    status: 'loading' | 'success' | 'error' | 'abort',
+  ): string => {
+    if (nodeType === 'planning') {
+      if (status === 'loading') return '步骤进行中';
+      if (status === 'success') return '步骤完成';
+      if (status === 'error') return '步骤异常';
+      return '步骤中止';
+    }
+    return getFallbackToolDescription(key, status);
+  };
+
+  const getThoughtNodeTypeLabel = (nodeType: 'planning' | 'tool'): string => {
+    return nodeType === 'planning' ? '规划节点' : '工具节点';
+  };
+
   return (
     <div className="message-list" data-testid="message-list">
       {messages.map((message, index) => {
@@ -102,22 +120,48 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
         const isError = message.status === 'error';
         const hasContent = Boolean(message.content);
         const hasThinking = Boolean(message.thinkingContent);
-        const hasToolTrace = Boolean(message.toolTrace?.length);
-        const toolItems =
-          message.toolTrace?.map((trace, traceIndex) => ({
-            key: `${message.id}-${trace.key}-${traceIndex}`,
-            title: trace.title,
-            description:
-              trace.description ||
-              getFallbackToolDescription(trace.key, trace.status),
-            status: trace.status,
-            icon:
-              trace.status === 'loading' ? (
-                <ClockCircleOutlined />
-              ) : trace.status === 'error' ? (
-                <ExclamationCircleOutlined />
-              ) : undefined,
-          })) ?? [];
+        const hasThoughtChain = Boolean(message.thoughtChain?.length);
+        const hasToolTrace = Boolean(
+          message.thoughtChain?.some(node => node.type === 'tool'),
+        );
+        const thoughtChainItems =
+          [...(message.thoughtChain ?? [])]
+            .sort((left, right) => left.order - right.order)
+            .map((node, nodeIndex) => ({
+              key: `${message.id}-${node.key}-${nodeIndex}`,
+              title: (
+                <div className="thought-chain-node-title">
+                  <span className="thought-chain-node-type">
+                    {getThoughtNodeTypeLabel(node.type)}
+                  </span>
+                  <span className="thought-chain-node-main-title">
+                    {node.title}
+                  </span>
+                </div>
+              ),
+              description: (
+                <div className="thought-chain-node-description">
+                  {node.description ||
+                    getFallbackThoughtDescription(node.type, node.key, node.status)}
+                </div>
+              ),
+              status: node.status,
+              collapsible: true,
+              className: `thought-chain-node thought-chain-node-${node.status}`,
+              icon:
+                node.status === 'loading' ? (
+                  <ClockCircleOutlined />
+                ) : node.status === 'error' ? (
+                  <ExclamationCircleOutlined />
+                ) : node.status === 'success' ? (
+                  <CheckCircleFilled />
+                ) : node.status === 'abort' ? (
+                  <MinusCircleFilled />
+                ) : undefined,
+            })) ?? [];
+        const defaultExpandedKeys = thoughtChainItems
+          .filter(item => item.status === 'loading')
+          .map(item => item.key);
 
         return (
           <div
@@ -153,9 +197,28 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
                       {message.content}
                     </XMarkdown>
                   )}
-                  {hasToolTrace && (
-                    <div className="tool-thought-chain">
-                      <ThoughtChain items={toolItems} line="dashed" />
+                  {hasThoughtChain && (
+                    <div className="tool-thought-chain thought-chain-panel">
+                      <ThoughtChain
+                        items={thoughtChainItems}
+                        line="dashed"
+                        defaultExpandedKeys={defaultExpandedKeys}
+                        classNames={{
+                          root: 'thought-chain-root',
+                          item: 'thought-chain-item',
+                          itemIcon: 'thought-chain-item-icon',
+                          itemHeader: 'thought-chain-item-header',
+                          itemContent: 'thought-chain-item-content',
+                        }}
+                        styles={{
+                          root: {
+                            width: '100%',
+                          },
+                          itemHeader: {
+                            alignItems: 'flex-start',
+                          },
+                        }}
+                      />
                     </div>
                   )}
                   {(isComplete || isAborted || isError) && (

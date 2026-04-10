@@ -4,10 +4,19 @@ from pathlib import Path
 from playwright.sync_api import Page, expect
 
 CHAT_LAMBDA_FILE = Path("api/lambda/chat/index.ts")
+LANGGRAPH_RUNTIME_FILE = Path("api/lambda/chat/langgraph/runtime.ts")
 
 
 def _read_chat_lambda() -> str:
     return CHAT_LAMBDA_FILE.read_text(encoding="utf-8")
+
+
+def _read_runtime() -> str:
+    return LANGGRAPH_RUNTIME_FILE.read_text(encoding="utf-8")
+
+
+def _read_orchestration_source() -> str:
+    return f"{_read_chat_lambda()}\n{_read_runtime()}"
 
 
 def test_phase2_tavily_auth_and_request_contract():
@@ -24,7 +33,7 @@ def test_phase2_tavily_auth_and_request_contract():
         - 存在 Authorization: Bearer 鉴权头
         - 请求体包含 query / search_depth / max_results / topic
     """
-    source = _read_chat_lambda()
+    source = _read_orchestration_source()
     assert "Authorization: `Bearer ${apiKey}`" in source
     assert "query," in source
     assert "search_depth: 'basic'" in source
@@ -46,7 +55,7 @@ def test_phase2_tavily_success_fusion_contract():
         - 存在 toolContext 拼接进 finalSystemPrompt 的逻辑
         - 存在“不暴露原始JSON”的融合指令
     """
-    source = _read_chat_lambda()
+    source = _read_orchestration_source()
     assert "emitToolStatus(" in source
     assert "'tavily'" in source
     assert "'success'" in source
