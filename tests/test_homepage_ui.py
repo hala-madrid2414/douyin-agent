@@ -1,5 +1,8 @@
 import pytest
 from playwright.sync_api import Page, expect
+import os
+
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
 def test_homepage_ui_elements(page: Page):
     """
@@ -15,7 +18,7 @@ def test_homepage_ui_elements(page: Page):
     [预期结果]: 所有核心 UI 组件均按预期正确渲染并可见。
     """
     # 1. 访问首页
-    page.goto("http://localhost:8080")
+    page.goto(BASE_URL)
     
     # 2. 验证左侧边栏 (Sidebar)
     # 验证新对话按钮

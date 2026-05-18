@@ -1,30 +1,72 @@
-import React from 'react';
-import { Avatar, Button, Space, Typography } from 'antd';
-import { Welcome, Prompts } from '@ant-design/x';
+import { DESIGN_GUIDES, HOT_TOPICS } from '@/constants/chat';
 import {
-  ShareAltOutlined,
+  BookOutlined,
+  CameraOutlined,
+  CarOutlined,
+  CompassOutlined,
   EllipsisOutlined,
+  EnvironmentOutlined,
   FireOutlined,
-  ReadOutlined,
-  BulbOutlined,
-  UserOutlined,
-  MessageOutlined,
-  LayoutOutlined,
-  RobotOutlined,
+  ShareAltOutlined,
 } from '@ant-design/icons';
-import { HOT_TOPICS, DESIGN_GUIDES } from '@/constants/chat';
+import type { PromptsProps } from '@ant-design/x';
+import { Prompts, Welcome } from '@ant-design/x';
+import { Avatar, Button, Space, Typography } from 'antd';
+import type React from 'react';
 import './WelcomeView.less';
 
 const { Title } = Typography;
 
 const iconMap: Record<string, React.ReactNode> = {
-  BulbOutlined: <BulbOutlined className="design-guide-icon" />,
-  UserOutlined: <UserOutlined className="design-guide-icon" />,
-  MessageOutlined: <MessageOutlined className="design-guide-icon" />,
-  LayoutOutlined: <LayoutOutlined className="design-guide-icon" />,
+  EnvironmentOutlined: <EnvironmentOutlined className="design-guide-icon" />,
+  CarOutlined: <CarOutlined className="design-guide-icon" />,
+  CameraOutlined: <CameraOutlined className="design-guide-icon" />,
+  BookOutlined: <BookOutlined className="design-guide-icon" />,
 };
 
-const WelcomeView: React.FC = () => {
+const renderTitle = (icon: React.ReactElement, title: string) => (
+  <Space align="start">
+    {icon}
+    <span>{title}</span>
+  </Space>
+);
+
+const items: PromptsProps['items'] = [
+  {
+    key: 'hot-topics',
+    label: renderTitle(
+      <FireOutlined style={{ color: '#ff4d4f' }} />,
+      '热门话题',
+    ),
+    description: '你想了解什么？',
+    children: HOT_TOPICS.map((topic, index) => ({
+      key: topic.id,
+      icon: (
+        <div className={`hot-topic-number rank-${index + 1}`}>{index + 1}</div>
+      ),
+      description: topic.title,
+    })),
+  },
+  {
+    key: 'design-guide',
+    label: renderTitle(
+      <CompassOutlined style={{ color: '#722ed1' }} />,
+      '旅行指南',
+    ),
+    description: '如何规划完美的旅程？',
+    children: DESIGN_GUIDES.map(guide => ({
+      key: guide.id,
+      icon: guide.icon ? iconMap[guide.icon] : null,
+      description: guide.title,
+    })),
+  },
+];
+
+export interface WelcomeViewProps {
+  onPromptClick?: (content: string) => void;
+}
+
+const WelcomeView: React.FC<WelcomeViewProps> = ({ onPromptClick }) => {
   return (
     <div className="welcome-view">
       {/* 头部区域 */}
@@ -34,11 +76,19 @@ const WelcomeView: React.FC = () => {
         icon={
           <Avatar
             size={64}
-            src="https://mdn.alipayobjects.com/huamei_7uahnr/afts/img/A*2h8ITp0H8FkAAAAAAAAAAAAADrJ8AQ/original"
+            icon={
+              <CompassOutlined style={{ fontSize: 32, color: '#1677ff' }} />
+            }
+            style={{
+              backgroundColor: '#e6f4ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           />
         }
-        title="你好，我是 Ant Design X"
-        description="基于蚂蚁设计，AGI 产品界面解决方案，打造更好的智能视觉~~"
+        title="你好，我是你的旅行搭子"
+        description="探索世界每一个角落，为你定制独一无二的旅行体验"
         extra={
           <Space>
             <Button icon={<ShareAltOutlined />} />
@@ -49,43 +99,23 @@ const WelcomeView: React.FC = () => {
 
       {/* 推荐卡片区域 */}
       <div className="recommendation-cards">
-        {/* 左侧：热门话题 */}
-        <div className="card-column">
-          <div className="column-title">
-            <FireOutlined style={{ color: '#ff4d4f' }} />
-            <span>热门话题</span>
-          </div>
-          <Prompts
-            vertical
-            items={HOT_TOPICS.map((topic, index) => ({
-              key: topic.id,
-              icon: (
-                <div className={`hot-topic-number rank-${index + 1}`}>
-                  {index + 1}
-                </div>
-              ),
-              label: topic.title,
-              description: topic.description,
-            }))}
-          />
-        </div>
-
-        {/* 右侧：设计指南 */}
-        <div className="card-column">
-          <div className="column-title">
-            <ReadOutlined style={{ color: '#722ed1' }} />
-            <span>设计指南</span>
-          </div>
-          <Prompts
-            vertical
-            items={DESIGN_GUIDES.map((guide) => ({
-              key: guide.id,
-              icon: guide.icon ? iconMap[guide.icon] : null,
-              label: guide.title,
-              description: guide.description,
-            }))}
-          />
-        </div>
+        <Prompts
+          title="你想要？"
+          items={items}
+          wrap
+          className="custom-prompts-nested"
+          onItemClick={info => {
+            const hotTopic = HOT_TOPICS.find(t => t.id === info.data.key);
+            if (hotTopic && onPromptClick) {
+              onPromptClick(hotTopic.title);
+              return;
+            }
+            const guide = DESIGN_GUIDES.find(g => g.id === info.data.key);
+            if (guide && onPromptClick) {
+              onPromptClick(guide.title);
+            }
+          }}
+        />
       </div>
     </div>
   );

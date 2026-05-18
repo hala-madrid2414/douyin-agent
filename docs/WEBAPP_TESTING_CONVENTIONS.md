@@ -181,3 +181,19 @@ AI/Agent 生成代码后，需进行自我 review：
 1. **可读性**：是否包含标准的 Docstring 用例模板和必要的行内注释？
 2. **稳定性**：是否强制使用了 `expect` 替代原生 `assert`？是否彻底避免了 `time.sleep()` 和滥用 `networkidle`？
 3. **可维护性**：选择器是否健壮（首选 role/text）？测试数据是否解耦？
+
+### 6.7 Modern.js + Rspack 单进程强制规则
+为避免 `rspack` 持久化缓存写入冲突（典型报错如 `Transaction already in progress`），本项目新增如下强制执行规范：
+- **同一时间只允许一个构建进程**：任意时刻只能存在一个 `pnpm run dev`（或任何触发 Rspack 构建缓存写入的进程）。
+- **禁止并发启动**：不得在多个终端同时启动 dev/server/watch，也不得在测试脚本内外重复拉起构建进程。
+- **测试前先清理残留进程**：若上次异常退出，必须先终止残留 Node/Rspack 进程，再执行下一次启动。
+- **服务生命周期统一托管**：自动化测试优先通过 `with_server.py` 启停服务，避免人工命令与脚本命令并发。
+
+**推荐执行顺序（Windows）**
+1. 终止残留构建进程（如存在）。
+2. 确认端口空闲（默认 8080）。
+3. 仅启动一次 `pnpm run dev`。
+4. 执行测试；测试结束后关闭该进程。
+
+**判定标准**
+- 若出现 `Transaction already in progress`、`content hash mismatch`、随机 `ERR_CONNECTION_REFUSED`，优先判定为“构建进程并发/残留导致的环境故障”，先恢复单进程再复测。

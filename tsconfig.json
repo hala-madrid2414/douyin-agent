@@ -6,7 +6,9 @@
     "baseUrl": "./",
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@api/*": ["./api/lambda/*"],
+      "@modern-js/app-tools": ["./node_modules/@modern-js/app-tools"]
     }
   },
   "include": ["src", "shared", "config", "modern.config.ts"],

@@ -1,4 +1,3 @@
-import { CHAT_HISTORY } from '@/constants/chat';
 import {
   MessageOutlined,
   PlusOutlined,
@@ -7,26 +6,48 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { Button } from 'antd';
-import React, { useState } from 'react';
+import React from 'react';
 import './Sidebar.less';
 
-const Sidebar: React.FC = () => {
-  const [activeId, setActiveId] = useState<string>('history-1');
+export interface SidebarSessionItem {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
 
-  // 模拟分组逻辑
+export interface SidebarProps {
+  activeId: string | null;
+  sessions: SidebarSessionItem[];
+  onSelectSession: (id: string) => void;
+  onNewChat: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({
+  activeId,
+  sessions,
+  onSelectSession,
+  onNewChat,
+}) => {
+  const now = Date.now();
   const groupedHistory = {
-    今天: CHAT_HISTORY.filter(
-      item => item.time.includes('小时') || item.time.includes('分钟'),
-    ),
-    昨天: CHAT_HISTORY.filter(item => item.time === '昨天'),
-    前7天: CHAT_HISTORY.filter(
-      item => item.time.includes('天前') || item.time.includes('周前'),
-    ),
+    今天: sessions.filter(item => {
+      const diff = now - new Date(item.updatedAt).getTime();
+      return diff < 24 * 60 * 60 * 1000;
+    }),
+    昨天: sessions.filter(item => {
+      const diff = now - new Date(item.updatedAt).getTime();
+      return diff >= 24 * 60 * 60 * 1000 && diff < 48 * 60 * 60 * 1000;
+    }),
+    前7天: sessions.filter(item => {
+      const diff = now - new Date(item.updatedAt).getTime();
+      return diff >= 48 * 60 * 60 * 1000;
+    }),
   };
+
+  const orderedGroups = ['今天', '昨天', '前7天'] as const;
 
   return (
     <div className="sidebar-container">
-      {/* Logo 区 */}
       <div className="sidebar-logo">
         <div className="logo-icon">
           <RobotOutlined
@@ -36,33 +57,36 @@ const Sidebar: React.FC = () => {
         <span>Douyin Agent</span>
       </div>
 
-      {/* 新对话按钮 */}
       <Button
         type="primary"
         icon={<PlusOutlined />}
         className="new-chat-btn"
-        onClick={() => setActiveId('')}
+        onClick={onNewChat}
       >
         新对话
       </Button>
 
-      {/* 历史会话列表 */}
       <div className="sidebar-history">
-        {Object.entries(groupedHistory).map(([groupName, items]) => {
+        {orderedGroups.map(groupName => {
+          const items = groupedHistory[groupName].sort(
+            (left, right) =>
+              new Date(right.updatedAt).getTime() -
+              new Date(left.updatedAt).getTime(),
+          );
           if (items.length === 0) return null;
           return (
             <div key={groupName}>
               <div className="history-group-title">{groupName}</div>
               {items.map(item => (
                 <React.Fragment key={item.id}>
-                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: Mockup */}
-                  <div
+                  <button
+                    type="button"
                     className={`history-item ${activeId === item.id ? 'active' : ''}`}
-                    onClick={() => setActiveId(item.id)}
+                    onClick={() => onSelectSession(item.id)}
                   >
                     <MessageOutlined className="history-icon" />
                     <span>{item.title}</span>
-                  </div>
+                  </button>
                 </React.Fragment>
               ))}
             </div>
@@ -70,7 +94,6 @@ const Sidebar: React.FC = () => {
         })}
       </div>
 
-      {/* 底部设置/用户头像入口 */}
       <div className="sidebar-footer">
         <div className="footer-item">
           <UserOutlined className="footer-icon" />

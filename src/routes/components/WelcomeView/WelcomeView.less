@@ -17,25 +17,44 @@
     width: 100%;
     max-width: 860px;
     display: flex;
-    gap: 24px;
     justify-content: center;
-    flex-wrap: wrap;
 
-    .card-column {
-      flex: 1;
-      min-width: 300px;
-      background: #f9f0ff;
-      border-radius: 16px;
-      padding: 24px;
+    .custom-prompts-nested {
+      width: 100%;
+      
+      :global {
+        /* Remove default margin/padding from the list if needed */
+        .ant-prompts-list {
+          gap: 16px;
+          align-items: stretch;
+        }
 
-      .column-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 20px;
-        color: #1f1f1f;
+        .ant-prompts-item {
+          flex: none;
+          width: calc(50% - 8px); /* 2 columns with 16px gap */
+          background-image: linear-gradient(137deg, #e5f4ff 0%, #efe7ff 100%);
+          border: 0;
+          border-radius: 16px;
+          padding: 24px;
+          height: auto;
+          
+          /* Ensuring the internal layout of the item takes full height if we want them aligned */
+          display: flex;
+          flex-direction: column;
+        }
+
+        .ant-prompts-sub-item {
+          background: rgba(255, 255, 255, 0.45);
+          border: 1px solid #fff;
+          border-radius: 12px;
+          transition: all 0.3s ease;
+          
+          &:hover {
+            border-color: #d3adf7;
+            box-shadow: 0 4px 12px rgba(114, 46, 209, 0.08);
+            transform: translateY(-2px);
+          }
+        }
       }
     }
   }
@@ -72,49 +91,4 @@
   font-size: 24px;
   color: #722ed1;
   flex-shrink: 0;
-}
-
-/* Override default Prompts styles to look like white cards */
-:global {
-  .ant-prompts {
-    width: 100%;
-  }
-  
-  .ant-prompts-item {
-    background: #ffffff;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-    border: 1px solid transparent;
-    transition: all 0.3s ease;
-    cursor: pointer;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-
-    &:hover {
-      border-color: #d3adf7;
-      box-shadow: 0 4px 12px rgba(114, 46, 209, 0.08);
-      transform: translateY(-2px);
-    }
-
-    .ant-prompts-item-content {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-
-      .ant-prompts-item-title {
-        font-size: 15px;
-        font-weight: 600;
-        color: #1f1f1f;
-      }
-
-      .ant-prompts-item-description {
-        font-size: 13px;
-        color: #8c8c8c;
-        line-height: 1.5;
-      }
-    }
-  }
 }
