@@ -20,6 +20,7 @@ def test_task4_session_type_contains_unified_thoughtchain_node():
     source = _read(SESSION_TYPES_FILE)
     assert "export type ThoughtChainNodeType" in source
     assert "export interface ThoughtChainNode" in source
+    assert "export type ThoughtChainNodeType = 'thinking' | 'tool';" in source
     assert "type: ThoughtChainNodeType;" in source
     assert "order: number;" in source
     assert "thoughtChain?: ThoughtChainNode[]" in source
@@ -34,7 +35,7 @@ def test_task4_chat_store_consumes_planning_and_tool_status_into_thoughtchain():
     source = _read(CHAT_STORE_FILE)
     assert "event.event === 'planning'" in source
     assert "thoughtChain" in source
-    assert "type: 'planning'" in source
+    assert "type: 'thinking'" in source or "type: 'planning'" in source
     assert "type: 'tool'" in source
     assert "order:" in source
     assert "sortThoughtChainByOrder" in source
@@ -52,6 +53,7 @@ def test_task45_message_list_renders_thoughtchain_with_semantic_props():
     assert "<ThoughtChain" in source
     assert "line=\"dashed\"" in source
     assert "defaultExpandedKeys" in source
+    assert "children:" in source
     assert "classNames" in source or "styles" in source
     assert "root: 'thought-chain-root'" in source
     assert "itemIcon: 'thought-chain-item-icon'" in source

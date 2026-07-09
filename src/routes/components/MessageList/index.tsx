@@ -93,21 +93,17 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
   };
 
   const getFallbackThoughtDescription = (
-    nodeType: 'planning' | 'tool',
+    nodeType: 'thinking' | 'tool',
     key: string,
     status: 'loading' | 'success' | 'error' | 'abort',
   ): string => {
-    if (nodeType === 'planning') {
+    if (nodeType !== 'tool') {
       if (status === 'loading') return '步骤进行中';
       if (status === 'success') return '步骤完成';
       if (status === 'error') return '步骤异常';
       return '步骤中止';
     }
     return getFallbackToolDescription(key, status);
-  };
-
-  const getThoughtNodeTypeLabel = (nodeType: 'planning' | 'tool'): string => {
-    return nodeType === 'planning' ? '规划节点' : '工具节点';
   };
 
   return (
@@ -124,44 +120,52 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onRetry }) => {
         const hasToolTrace = Boolean(
           message.thoughtChain?.some(node => node.type === 'tool'),
         );
-        const thoughtChainItems =
-          [...(message.thoughtChain ?? [])]
-            .sort((left, right) => left.order - right.order)
-            .map((node, nodeIndex) => ({
-              key: `${message.id}-${node.key}-${nodeIndex}`,
-              title: (
-                <div className="thought-chain-node-title">
-                  <span className="thought-chain-node-type">
-                    {getThoughtNodeTypeLabel(node.type)}
-                  </span>
-                  <span className="thought-chain-node-main-title">
-                    {node.title}
-                  </span>
-                </div>
-              ),
-              description: (
-                <div className="thought-chain-node-description">
-                  {node.description ||
-                    getFallbackThoughtDescription(node.type, node.key, node.status)}
-                </div>
-              ),
-              status: node.status,
-              collapsible: true,
-              className: `thought-chain-node thought-chain-node-${node.status}`,
-              icon:
-                node.status === 'loading' ? (
-                  <ClockCircleOutlined />
-                ) : node.status === 'error' ? (
-                  <ExclamationCircleOutlined />
-                ) : node.status === 'success' ? (
-                  <CheckCircleFilled />
-                ) : node.status === 'abort' ? (
-                  <MinusCircleFilled />
-                ) : undefined,
-            })) ?? [];
-        const defaultExpandedKeys = thoughtChainItems
-          .filter(item => item.status === 'loading')
-          .map(item => item.key);
+        const sortedThoughtNodes = [...(message.thoughtChain ?? [])].sort(
+          (left, right) => left.order - right.order,
+        );
+        const toThoughtChainItem = (
+          node: (typeof sortedThoughtNodes)[number],
+          nodeIndex: number,
+        ) => ({
+          key: `${message.id}-${node.key}-${nodeIndex}`,
+          title: (
+            <div className="thought-chain-node-title">
+              <span className="thought-chain-node-main-title">{node.title}</span>
+            </div>
+          ),
+          description: (
+            <div className="thought-chain-node-description">
+              {node.description ||
+                getFallbackThoughtDescription(node.type, node.key, node.status)}
+            </div>
+          ),
+          status: node.status,
+          collapsible: true,
+          className: `thought-chain-node thought-chain-node-${node.status}`,
+          icon:
+            node.status === 'loading' ? (
+              <ClockCircleOutlined />
+            ) : node.status === 'error' ? (
+              <ExclamationCircleOutlined />
+            ) : node.status === 'success' ? (
+              <CheckCircleFilled />
+            ) : node.status === 'abort' ? (
+              <MinusCircleFilled />
+            ) : undefined,
+        });
+        const thinkingNode = sortedThoughtNodes.find(node => node.type === 'thinking');
+        const toolNodes = sortedThoughtNodes.filter(node => node.type === 'tool');
+        const thoughtChainItems = thinkingNode
+          ? [
+              {
+                ...toThoughtChainItem(thinkingNode, 0),
+                children: toolNodes.map((node, nodeIndex) =>
+                  toThoughtChainItem(node, nodeIndex + 1),
+                ),
+              },
+            ]
+          : toolNodes.map((node, nodeIndex) => toThoughtChainItem(node, nodeIndex));
+        const defaultExpandedKeys: string[] = [];
 
         return (
           <div

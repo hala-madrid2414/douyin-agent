@@ -1,5 +1,7 @@
 # WebApp Testing Conventions
 
+> 权威边界：本文档是 WebApp 自动化测试、Playwright 编写规则、`.venv/`、`reports/`、测试产物、`networkidle` 使用限制，以及测试场景下单 Rspack 进程执行流程的 Source of Truth。工程结构规则见 `docs/ARCHITECTURE_CONVENTIONS.md`；AI 协作与验证路由见 `AGENTS.md` 和 `docs/AI_COLLABORATION_SYSTEM.md`。
+
 本文档定义了本项目基于 Playwright 的前端及全栈 WebApp 自动化测试规范。本规范兼顾开发者手动编写与 AI/Agent 自动生成，所有测试代码必须严格遵循此规范，以确保工程的高效、稳定与可维护。
 
 ---

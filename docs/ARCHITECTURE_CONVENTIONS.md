@@ -1,5 +1,7 @@
 # Modern.js Agent 全栈应用目录组织与编码规范
 
+> 权威边界：本文档是工程结构、组件划分、状态管理、导入导出与服务分层的 Source of Truth。UI 视觉规范以 `design-system/MASTER.md` 为准；WebApp/Playwright 测试、`reports/`、`.venv/` 与详细 Rspack 测试执行流程以 `docs/WEBAPP_TESTING_CONVENTIONS.md` 为准；AI 协作入口与纠偏流程以 `AGENTS.md` 和 `docs/AI_COLLABORATION_SYSTEM.md` 为准。
+
 ## 1. 范围与背景
 本规范旨在为基于 Modern.js 框架的 Agent 全栈应用（类 AI 对话框、生成式 UI）提供统一的开发标准与文件组织逻辑。
 核心参考基准：Modern.js 约定式路由与 BFF 架构、Zustand 全局状态管理、Ant Design X (antdx) AI 组件的最佳实践，以及“配置驱动”与“高内聚低耦合”的设计原则。
@@ -67,5 +69,4 @@
 #### 强制规范
 - **单构建进程原则**：同一项目工作目录在任意时刻仅允许一个 Rspack 构建进程（如 `pnpm run dev`、watch 模式构建）。
 - **禁止并发触发缓存写入**：禁止“手动 dev 命令 + 自动化脚本”并发运行，避免持久化缓存目录并发写入冲突。
-- **异常恢复优先级最高**：一旦出现 `Transaction already in progress` 等报错，必须先停止所有相关进程并清理冲突缓存，再继续开发与测试。
-- **测试与开发解耦但不并发**：测试可由脚本托管服务生命周期，但不允许与其他已运行 dev 进程重叠。
+- **测试执行细则**：具体的测试服务托管、残留进程恢复、`reports/` 产物和 `Transaction already in progress` 判定流程，以 `docs/WEBAPP_TESTING_CONVENTIONS.md` 为准。
