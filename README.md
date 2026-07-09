@@ -1,32 +1,69 @@
-# Modern.js App
+# Douyin Agent
 
-## Setup
+A Modern.js travel assistant Agent experiment with React, Zustand, Ant Design X,
+SSE streaming, tool calling, ThoughtChain status display, and local frontend
+conversation persistence.
 
-Install the dependencies:
+## Quick Start
+
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-## Get Started
-
-Start the start server:
+Start the development server:
 
 ```bash
-pnpm start
+pnpm run dev
 ```
 
-Build the app for production:
+Build for production:
 
 ```bash
-pnpm build
+pnpm run build
 ```
 
-Preview the production build locally:
+Preview the production build:
 
 ```bash
-pnpm serve
+pnpm run serve
 ```
 
-For more information, see the [Modern.js documentation](https://modernjs.dev/en).
+Run the configured lint check:
 
+```bash
+pnpm run lint
+```
+
+## Project Map
+
+- Frontend routes and page composition: `src/routes/`
+- Shared chat state: `src/stores/chatStore.ts`
+- Session and toolchain types: `src/types/session.ts`
+- BFF chat and streaming endpoint: `api/lambda/chat/index.ts`
+- LangGraph runtime contracts: `src/server/chat/langgraph/`
+- WebApp tests: `tests/`
+
+## Authoritative Docs
+
+- AI agent entry guide: `AGENTS.md`
+- AI collaboration system: `docs/AI_COLLABORATION_SYSTEM.md`
+- Engineering conventions: `docs/ARCHITECTURE_CONVENTIONS.md`
+- WebApp testing conventions: `docs/WEBAPP_TESTING_CONVENTIONS.md`
+- UI design source of truth: `design-system/MASTER.md`
+- Current Agent/SSE/ThoughtChain runtime notes:
+  `docs/plans/2026-04-08-ai-intent-to-tool-calling-technical-note.md`
+- API contract reference: `docs/API_SPEC.md`
+
+For AI-assisted development, read `AGENTS.md` first. Local `.trae/` specs and
+documents are useful history, but they are not formal project authority unless a
+formal doc explicitly promotes them.
+
+## Testing Notes
+
+Python/Playwright tests live under `tests/`. Generated test artifacts belong in
+`reports/`, which is ignored by git.
+
+This project uses Modern.js/Rspack. Keep only one dev/build/watch process running
+per workspace to avoid persistent cache conflicts.

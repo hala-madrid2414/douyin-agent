@@ -67,7 +67,7 @@ const TOOL_STATUS_MAP: Record<string, ToolCallTrace['status']> = {
   abort: 'abort',
 };
 
-const PLANNING_STATUS_MAP: Record<string, ThoughtChainNode['status']> = {
+const THINKING_STATUS_MAP: Record<string, ThoughtChainNode['status']> = {
   pending: 'loading',
   running: 'loading',
   success: 'success',
@@ -85,6 +85,52 @@ type PlanningStepPayload = {
   title: string;
   description?: string;
   status?: string;
+};
+
+const isThinkingNode = (node: ThoughtChainNode): boolean => {
+  return node.type === 'thinking';
+};
+
+const getToolDisplayName = (toolKey: string, title?: string): string => {
+  return String(title || TOOL_TITLE_FALLBACK[toolKey] || '通用工具');
+};
+
+const getToolThoughtNodeTitle = (toolKey: string, title?: string): string => {
+  return `调用工具${getToolDisplayName(toolKey, title)}`;
+};
+
+const resolveThinkingStatus = (
+  steps: PlanningStepPayload[],
+): ThoughtChainNode['status'] => {
+  const statuses = steps.map(
+    step => THINKING_STATUS_MAP[String(step.status || 'pending')] ?? 'loading',
+  );
+  if (statuses.some(status => status === 'abort')) {
+    return 'abort';
+  }
+  if (statuses.some(status => status === 'error')) {
+    return 'error';
+  }
+  if (statuses.some(status => status === 'loading')) {
+    return 'loading';
+  }
+  return 'success';
+};
+
+const resolveThinkingDescription = (
+  steps: PlanningStepPayload[],
+): string | undefined => {
+  const latestStep = [...steps]
+    .reverse()
+    .find(step => String(step.status || 'pending') !== 'pending');
+  if (!latestStep) {
+    return undefined;
+  }
+  const stepTitle = String(latestStep.title || '步骤执行');
+  const stepDescription = latestStep.description
+    ? `：${String(latestStep.description)}`
+    : '';
+  return `当前步骤：${stepTitle}${stepDescription}`;
 };
 
 const sortThoughtChainByOrder = (
@@ -129,22 +175,22 @@ const mergePlanningThoughtChain = (
   planId: string,
   steps: PlanningStepPayload[],
 ): ThoughtChainNode[] => {
-  const planningNodes: ThoughtChainNode[] = steps.map((step, index) => ({
-    key: `planning:${planId}:${step.key}:${index}`,
-    type: 'planning',
-    order: index,
+  const thinkingNode: ThoughtChainNode = {
+    key: `thinking:${planId}`,
+    type: 'thinking',
+    order: 0,
     planId,
-    title: String(step.title || '执行步骤'),
-    description: step.description ? String(step.description) : undefined,
-    status: PLANNING_STATUS_MAP[String(step.status || 'pending')] ?? 'loading',
-  }));
-  const nonPlanningNodes = sortThoughtChainByOrder(
-    previousChain.filter(node => node.type !== 'planning'),
+    title: '深度思考',
+    description: resolveThinkingDescription(steps),
+    status: resolveThinkingStatus(steps),
+  };
+  const nonThinkingNodes = sortThoughtChainByOrder(
+    previousChain.filter(node => !isThinkingNode(node)),
   ).map((node, index) => ({
     ...node,
-    order: planningNodes.length + index,
+    order: 1 + index,
   }));
-  return sortThoughtChainByOrder([...planningNodes, ...nonPlanningNodes]);
+  return sortThoughtChainByOrder([thinkingNode, ...nonThinkingNodes]);
 };
 
 const MOCK_SESSION_SIGNATURE = JSON.stringify(
@@ -543,11 +589,14 @@ export const useChatStore = create<ChatStoreState>()(
         content: string,
         options?: { enableThinking?: boolean; forceToolCall?: boolean },
       ) => {
-        // 1. 若当前会话已有进行中的请求，先中止它
-        get().stopMessage(conversationId);
+        // Re-entrancy guard: the same conversation cannot start a second request
+        // while a stream is still active.
+        if (abortControllers.has(conversationId)) {
+          return;
+        }
 
         const userMessageId = createMessageId(conversationId, 'user');
-        // 2. 追加用户消息并设为 loading
+        // 1. 追加用户消息并设为 loading
         get().appendMessage(conversationId, {
           id: userMessageId,
           role: 'user',
@@ -571,12 +620,15 @@ export const useChatStore = create<ChatStoreState>()(
         try {
           let aiReplyContent = '';
           let aiThinkingContent = '';
-          // 3. 调用真实的 BFF 接口
+          // 2. 调用真实的 BFF 接口
           await fetchEventSource('/api/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
+            // Keep SSE alive when tab is hidden to avoid reconnect-triggered
+            // duplicate generation after returning from minimized/background.
+            openWhenHidden: true,
             signal: controller.signal,
             body: JSON.stringify({
               conversationId,
@@ -671,11 +723,13 @@ export const useChatStore = create<ChatStoreState>()(
                     ? `${toolKey}:${toolCallId}`
                     : toolKey;
                   const status = TOOL_STATUS_MAP[normalizedStatus] ?? 'loading';
+                  const toolDisplayName = getToolDisplayName(
+                    toolKey,
+                    data.title,
+                  );
                   const nextTrace: ToolCallTrace = {
                     key: traceKey,
-                    title: String(
-                      data.title || TOOL_TITLE_FALLBACK[toolKey] || '工具调用',
-                    ),
+                    title: toolDisplayName,
                     description: data.detail ? String(data.detail) : undefined,
                     status,
                   };
@@ -697,16 +751,14 @@ export const useChatStore = create<ChatStoreState>()(
                     getNextThoughtChainOrder(
                       previousThoughtChain,
                       previousThoughtChain.filter(
-                        node => node.type === 'planning',
+                        node => isThinkingNode(node),
                       ).length,
                     );
                   const nextThoughtNode: ThoughtChainNode = {
                     key: traceKey,
                     type: 'tool',
                     order: nextNodeOrder,
-                    title: String(
-                      data.title || TOOL_TITLE_FALLBACK[toolKey] || '工具调用',
-                    ),
+                    title: getToolThoughtNodeTitle(toolKey, data.title),
                     description: data.detail
                       ? String(data.detail)
                       : TOOL_DESCRIPTION_FALLBACK[toolKey],

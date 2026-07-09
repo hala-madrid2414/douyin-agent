@@ -13,7 +13,7 @@ export type ChatMessageStatus =
 
 export type ToolCallStatus = 'loading' | 'success' | 'error' | 'abort';
 
-export type ThoughtChainNodeType = 'planning' | 'tool';
+export type ThoughtChainNodeType = 'thinking' | 'tool';
 
 export interface ThoughtChainNode {
   key: string;
